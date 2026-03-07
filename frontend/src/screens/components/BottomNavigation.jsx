@@ -1,11 +1,12 @@
 import React from 'react';
 import { Wheat, Compass, BookOpen, Settings } from '@ds/icons';
-import { colors, spacing, typography } from '@ds/tokens';
+import { colors, typography } from '@ds/tokens';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 /**
  * BottomNavigation - Bottom navigation bar
  * Provides navigation between main screens (Today, Explore, Entries, Settings)
- * 
+ *
  * Requirements:
  * - 30.1: Display bottom navigation with 4 tabs
  * - 30.2: Use Design_System icons for all navigation items
@@ -15,37 +16,37 @@ import { colors, spacing, typography } from '@ds/tokens';
  * - 30.6: Ensure all tabs have minHeight 44px for accessibility
  */
 const BottomNavigation = ({ currentScreen, onNavigate }) => {
-  // Requirement 30.1: Display bottom navigation with 4 tabs
-  // Requirement 30.2: Use Design_System icons (Wheat, Compass, BookOpen, Settings)
+  const { language } = useLanguage();
+
   const tabs = [
-    { 
-      id: 'home', 
-      label: 'Today', 
+    {
+      id: 'home',
+      label: language === 'hi' ? 'आज' : 'today',
       Icon: Wheat,
-      ariaLabel: 'Navigate to Today screen'
+      ariaLabel: 'Navigate to Today screen',
     },
-    { 
-      id: 'explore', 
-      label: 'Explore', 
+    {
+      id: 'explore',
+      label: language === 'hi' ? 'खोजें' : 'explore',
       Icon: Compass,
-      ariaLabel: 'Navigate to Explore screen'
+      ariaLabel: 'Navigate to Explore screen',
     },
-    { 
-      id: 'chat', 
-      label: 'Entries', 
+    {
+      id: 'chat',
+      label: language === 'hi' ? 'रिकॉर्ड' : 'entries',
       Icon: BookOpen,
-      ariaLabel: 'Navigate to Entries screen'
+      ariaLabel: 'Navigate to Entries screen',
     },
-    { 
-      id: 'settings', 
-      label: 'Settings', 
+    {
+      id: 'settings',
+      label: language === 'hi' ? 'सेटिंग' : 'settings',
       Icon: Settings,
-      ariaLabel: 'Navigate to Settings screen'
+      ariaLabel: 'Navigate to Settings screen',
     },
   ];
 
   return (
-    <nav 
+    <nav
       style={{
         position: 'fixed',
         bottom: 0,
@@ -53,14 +54,15 @@ const BottomNavigation = ({ currentScreen, onNavigate }) => {
         right: 0,
         maxWidth: '390px',
         margin: '0 auto',
-        height: '64px',
+        height: '82px',
         display: 'flex',
         justifyContent: 'space-around',
-        alignItems: 'center',
-        background: 'rgba(255, 255, 255, 0.95)',
+        alignItems: 'flex-start',
+        paddingTop: '10px',
+        background: 'rgba(255,255,255,0.88)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
-        borderTop: `1px solid ${colors.border.light}`,
+        borderTop: '1px solid rgba(0,0,0,0.07)',
         zIndex: 100,
       }}
       role="navigation"
@@ -69,12 +71,8 @@ const BottomNavigation = ({ currentScreen, onNavigate }) => {
       {tabs.map((tab) => {
         const isActive = currentScreen === tab.id;
         const { Icon } = tab;
-        
-        // Requirement 30.4: Highlight active tab using primary action color (#138808)
-        // Requirement 30.5: Show inactive tabs with rgba(20,30,16,0.4) color
-        const iconColor = isActive ? colors.green.default : colors.text.secondary;
-        const textColor = isActive ? colors.green.default : colors.text.secondary;
-        
+        const iconColor = isActive ? colors.green.default : 'rgba(20,30,16,0.4)';
+
         return (
           <button
             key={tab.id}
@@ -86,13 +84,11 @@ const BottomNavigation = ({ currentScreen, onNavigate }) => {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: spacing['1'],
+              gap: '3px',
               minHeight: '44px',
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
               outline: 'none',
             }}
             onFocus={(e) => {
@@ -103,34 +99,37 @@ const BottomNavigation = ({ currentScreen, onNavigate }) => {
               e.currentTarget.style.outline = 'none';
             }}
           >
-            {/* Requirement 30.2: Use Design_System icons */}
-            <Icon size={20} color={iconColor} />
+            <Icon size={22} color={iconColor} />
             <span
               style={{
                 fontFamily: typography.fonts.sans,
-                fontSize: typography.size.xs,
-                fontWeight: isActive ? typography.weight.semibold : typography.weight.regular,
-                color: textColor,
-                transition: 'color 0.2s ease',
+                fontSize: '10px',
+                fontWeight: isActive ? typography.weight.semibold : typography.weight.medium,
+                color: iconColor,
+                letterSpacing: '0.3px',
               }}
             >
               {tab.label}
             </span>
-            {/* Active indicator dot */}
-            {isActive && (
-              <div
-                style={{
-                  width: '4px',
-                  height: '4px',
-                  borderRadius: '50%',
-                  background: colors.green.default,
-                  marginTop: spacing['1'],
-                }}
-              />
-            )}
           </button>
         );
       })}
+
+      {/* iPhone home indicator */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '8px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '40px',
+          height: '3px',
+          background: '#111',
+          borderRadius: '4px',
+          opacity: 0.2,
+          pointerEvents: 'none',
+        }}
+      />
     </nav>
   );
 };

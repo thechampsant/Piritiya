@@ -11,6 +11,8 @@ export const API_ENDPOINTS = {
   MARKET_PRICES: '/market-prices',
   ADVICE: '/advice',
   HEALTH: '/health',
+  TRANSCRIBE: '/speech/transcribe',
+  SYNTHESIZE: '/speech/synthesize',
 } as const;
 
 // Cache Configuration
@@ -40,6 +42,18 @@ export const LANGUAGE_LOCALES = {
   hi: 'hi-IN',
   en: 'en-IN',
 } as const;
+
+/** Per-language AWS voice support (matches piritiya-design-system i18n polly/transcribeRT). */
+export const VOICE_LANGUAGE_CONFIG: Record<string, { polly: boolean; transcribeRT: boolean }> = {
+  hi: { polly: true, transcribeRT: true },
+  en: { polly: true, transcribeRT: true },
+  bn: { polly: false, transcribeRT: false },
+  gu: { polly: false, transcribeRT: false },
+  kn: { polly: false, transcribeRT: false },
+  ml: { polly: false, transcribeRT: false },
+  ta: { polly: false, transcribeRT: false },
+  te: { polly: false, transcribeRT: false },
+};
 
 // IndexedDB Configuration
 export const DB_NAME = 'piritiya-db';

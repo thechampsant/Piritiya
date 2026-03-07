@@ -63,6 +63,14 @@ const translations = {
     en: 'Listening...',
     hi: 'सुन रहा हूँ...',
   },
+  tapToStopAndSend: {
+    en: 'Tap again to stop and send',
+    hi: 'भेजने के लिए फिर टैप करें',
+  },
+  voiceError: {
+    en: 'Voice failed. Try again or type.',
+    hi: 'आवाज़ काम नहीं आई। पुनः प्रयास करें या टाइप करें।',
+  },
   speaking: {
     en: 'Speaking...',
     hi: 'बोल रहा हूँ...',

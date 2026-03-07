@@ -93,10 +93,21 @@ def lambda_handler(event, context):
         farmer_response = farmers_table.get_item(Key={'farmer_id': farmer_id})
         
         if 'Item' not in farmer_response:
-            return {
-                'statusCode': 404,
-                'body': json.dumps({'error': f'Farmer {farmer_id} not found'})
-            }
+            error_msg = json.dumps({'error': f'Farmer {farmer_id} not found'})
+            if is_bedrock_agent:
+                return {
+                    "messageVersion": "1.0",
+                    "response": {
+                        "actionGroup": event.get("actionGroup", ""),
+                        "function": event.get("function", ""),
+                        "functionResponse": {
+                            "responseBody": {
+                                "TEXT": {"body": error_msg}
+                            }
+                        }
+                    }
+                }
+            return {'statusCode': 404, 'body': error_msg}
         
         farmer_data = farmer_response['Item']
         location = farmer_data['location']
@@ -116,10 +127,21 @@ def lambda_handler(event, context):
         )
         
         if not nisar_response['Items']:
-            return {
-                'statusCode': 404,
-                'body': json.dumps({'error': f'No NISAR data found for location {location_block}'})
-            }
+            error_msg = json.dumps({'error': f'No NISAR data found for location {location_block}'})
+            if is_bedrock_agent:
+                return {
+                    "messageVersion": "1.0",
+                    "response": {
+                        "actionGroup": event.get("actionGroup", ""),
+                        "function": event.get("function", ""),
+                        "functionResponse": {
+                            "responseBody": {
+                                "TEXT": {"body": error_msg}
+                            }
+                        }
+                    }
+                }
+            return {'statusCode': 404, 'body': error_msg}
         
         nisar_data = nisar_response['Items'][0]
         

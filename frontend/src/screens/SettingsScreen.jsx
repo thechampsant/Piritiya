@@ -10,24 +10,12 @@ import {
   FrostedCard,
 } from '@ds/components';
 import { colors, spacing, typography, radii, shadows, animation } from '@ds/tokens';
-import { Check } from '@ds/icons';
 import { getTranslation, formatNumber } from '../utils/i18n';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { cacheManager } from '../services/CacheManager';
 import { dbRepository } from '../services/DBRepository';
-
-// Language configuration
-const LANGUAGES = [
-  { code: 'hi', script: 'हिंदी', roman: 'Hindi', instant: true },
-  { code: 'en', script: 'English', roman: 'English', instant: true },
-  { code: 'bn', script: 'বাংলা', roman: 'Bengali', instant: false },
-  { code: 'gu', script: 'ગુજરાતી', roman: 'Gujarati', instant: false },
-  { code: 'kn', script: 'ಕನ್ನಡ', roman: 'Kannada', instant: false },
-  { code: 'ml', script: 'മലയാളം', roman: 'Malayalam', instant: false },
-  { code: 'ta', script: 'தமிழ்', roman: 'Tamil', instant: false },
-  { code: 'te', script: 'తెలుగు', roman: 'Telugu', instant: false },
-];
+import LangSheet from './components/LangSheet';
 
 /**
  * SettingsScreen - Settings management with design system components
@@ -43,7 +31,7 @@ const LANGUAGES = [
  * Requirements: 29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7, 29.8, 29.9, 29.10
  */
 const SettingsScreen = ({ onNavigate }) => {
-  const { state: appState, setFarmerId, toggleVoice, setLanguage: setAppLanguage } = useApp();
+  const { state: appState, setFarmerId, toggleVoice, setLanguage: setAppLanguage, setUseAwsVoice } = useApp();
   const { language } = useLanguage();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -179,28 +167,96 @@ const SettingsScreen = ({ onNavigate }) => {
       {/* Background gradient */}
       <AmbientBg />
 
-      {/* Main content */}
+      {/* Frosted header */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          background: 'rgba(255,255,255,0.65)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+          padding: '0 20px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => onNavigate && onNavigate('home')}
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.05)',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            aria-label={language === 'hi' ? 'वापस जाएं' : 'Go back'}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={colors.text.primary}
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <h2
+            style={{
+              fontFamily: typography.fonts.serif,
+              fontSize: '20px',
+              fontWeight: typography.weight.semibold,
+              color: colors.text.primary,
+            }}
+          >
+            {getTranslation('settings', language)}
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowLangSheet(true)}
+          style={{
+            background: 'rgba(0,0,0,0.06)',
+            border: '1px solid rgba(0,0,0,0.1)',
+            borderRadius: '100px',
+            padding: '4px 9px',
+            fontSize: '11px',
+            fontWeight: '500',
+            color: colors.text.primary,
+            cursor: 'pointer',
+            fontFamily: typography.fonts.sans,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+          aria-haspopup="dialog"
+          aria-expanded={showLangSheet}
+        >
+          {language === 'hi' ? 'हिन्दी' : 'English'}
+          <span style={{ color: 'rgba(20,30,16,0.4)' }}>▾</span>
+        </button>
+      </div>
+
+      {/* Main content - extra bottom padding so footer isn't cut off by fixed nav */}
       <div
         style={{
           position: 'relative',
           zIndex: 1,
           padding: spacing.screenPadding,
-          paddingBottom: '100px', // Space for bottom navigation and footer
+          paddingBottom: '160px',
           animation: `fadeUp ${animation.duration.slow} ${animation.easing.default}`,
         }}
       >
-        {/* Header */}
-        <h1
-          style={{
-            fontFamily: typography.fonts.serif,
-            fontSize: typography.size['3xl'],
-            fontWeight: typography.weight.semibold,
-            color: colors.text.primary,
-            marginBottom: spacing['8'],
-          }}
-        >
-          {getTranslation('settings', language)}
-        </h1>
 
         {/* Account Section */}
         <SettingSection>
@@ -218,25 +274,76 @@ const SettingsScreen = ({ onNavigate }) => {
             {language === 'hi' ? 'खाता' : 'Account'}
           </h2>
           <SettingRow label={getTranslation('farmerId', language)}>
-            <input
-              type="text"
-              value={farmerIdInput}
-              onChange={(e) => handleFarmerIdChange(e.target.value)}
-              onBlur={handleFarmerIdSave}
-              placeholder={language === 'hi' ? 'आईडी दर्ज करें' : 'Enter ID'}
-              style={{
-                fontFamily: typography.fonts.sans,
-                fontSize: typography.size.base,
-                color: colors.text.primary,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                textAlign: 'right',
-                minHeight: '44px',
-                padding: spacing['2'],
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+              <input
+                type="text"
+                value={farmerIdInput}
+                onChange={(e) => handleFarmerIdChange(e.target.value)}
+                placeholder={language === 'hi' ? 'आईडी दर्ज करें' : 'Enter ID'}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.base,
+                  color: colors.text.primary,
+                  background: 'rgba(0,0,0,0.04)',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  borderRadius: radii.md,
+                  outline: 'none',
+                  padding: '10px 12px',
+                  minHeight: '40px',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleFarmerIdSave}
+                style={{
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.sm,
+                  fontWeight: typography.weight.semibold,
+                  color: 'white',
+                  background: colors.green.default,
+                  border: 'none',
+                  borderRadius: radii.md,
+                  padding: '10px 16px',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {language === 'hi' ? 'सहेजें' : 'Save'}
+              </button>
+            </div>
           </SettingRow>
+
+          {/* Log out - clears farmer ID and redirects to onboarding */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await setFarmerId('');
+                // App will show onboarding when farmerId is empty (no need to navigate)
+              } catch (err) {
+                console.error('Failed to log out:', err);
+              }
+            }}
+            style={{
+              width: '100%',
+              fontFamily: typography.fonts.sans,
+              fontSize: typography.size.base,
+              fontWeight: typography.weight.medium,
+              color: colors.text.primary,
+              background: 'transparent',
+              border: `1px solid ${colors.border.default}`,
+              borderRadius: radii.lg,
+              padding: `${spacing['3']} ${spacing['4']}`,
+              marginTop: spacing['2'],
+              cursor: 'pointer',
+              minHeight: '44px',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {language === 'hi' ? 'लॉग आउट' : 'Log out'}
+          </button>
         </SettingSection>
 
         {/* Preferences Section */}
@@ -273,6 +380,13 @@ const SettingsScreen = ({ onNavigate }) => {
             <ToggleSwitch
               value={voiceOutputEnabled}
               onChange={handleVoiceOutputToggle}
+            />
+          </SettingRow>
+
+          <SettingRow label={language === 'hi' ? 'ऑनलाइन होने पर AWS आवाज़ इस्तेमाल करें' : 'Use AWS voice when online'}>
+            <ToggleSwitch
+              value={appState.useAwsVoice}
+              onChange={(value) => setUseAwsVoice(value)}
             />
           </SettingRow>
         </SettingSection>
@@ -415,17 +529,23 @@ const SettingsScreen = ({ onNavigate }) => {
           </button>
         </SettingSection>
 
-        {/* Footer with badges */}
+        {/* Footer with badges - extra margin so it scrolls fully above bottom nav */}
         <div
           style={{
             marginTop: spacing['12'],
+            marginBottom: spacing['4'],
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
             alignItems: 'center',
-            gap: spacing['4'],
+            justifyContent: 'center',
+            gap: '20px',
+            paddingTop: spacing['4'],
+            paddingBottom: spacing['4'],
+            borderTop: '1px solid rgba(0,0,0,0.06)',
           }}
         >
           <TeamBadge />
+          <div style={{ width: '1px', height: '14px', background: 'rgba(0,0,0,0.1)' }} />
           <AWSBadge />
         </div>
       </div>
@@ -544,155 +664,17 @@ const SettingsScreen = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Language Selection Sheet */}
-      {showLangSheet && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: colors.bg.overlay,
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-            zIndex: 1000,
-            animation: 'fadeIn 0.2s ease-out',
-          }}
-          onClick={() => setShowLangSheet(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '390px',
-              animation: 'slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
-            }}
-          >
-            <FrostedCard>
-              <div
-                style={{
-                  padding: spacing['6'],
-                  maxHeight: '70vh',
-                  overflowY: 'auto',
-                }}
-              >
-                <h3
-                  style={{
-                    fontFamily: typography.fonts.serif,
-                    fontSize: typography.size.xl,
-                    fontWeight: typography.weight.semibold,
-                    color: colors.text.primary,
-                    marginBottom: spacing['6'],
-                  }}
-                >
-                  {language === 'hi' ? 'भाषा चुनें' : 'Select Language'}
-                </h3>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: spacing['3'],
-                  }}
-                >
-                  {LANGUAGES.map((lang) => (
-                    <button
-                      key={lang.code}
-                      onClick={async () => {
-                        await setAppLanguage(lang.code);
-                        setShowLangSheet(false);
-                        // Show warning toast for batch languages
-                        if (!lang.instant) {
-                          // TODO: Show toast notification
-                          console.log('Batch language selected - slower processing');
-                        }
-                      }}
-                      style={{
-                        fontFamily: typography.fonts.sans,
-                        background: colors.bg.surface,
-                        border: `2px solid ${
-                          language === lang.code ? colors.green.default : colors.border.light
-                        }`,
-                        borderRadius: radii.lg,
-                        padding: spacing['4'],
-                        cursor: 'pointer',
-                        minHeight: '80px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        position: 'relative',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (language !== lang.code) {
-                          e.target.style.borderColor = colors.border.default;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (language !== lang.code) {
-                          e.target.style.borderColor = colors.border.light;
-                        }
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: typography.size.lg,
-                            fontWeight: typography.weight.semibold,
-                            color: colors.text.primary,
-                            marginBottom: spacing['1'],
-                          }}
-                        >
-                          {lang.script}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: typography.size.sm,
-                            color: colors.text.secondary,
-                          }}
-                        >
-                          {lang.roman}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: spacing['2'],
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: typography.size.xs,
-                            fontWeight: typography.weight.medium,
-                            color: lang.instant ? colors.green.default : colors.text.tertiary,
-                            background: lang.instant
-                              ? colors.green.subtle
-                              : colors.bg.card,
-                            padding: `${spacing['1']} ${spacing['2']}`,
-                            borderRadius: radii.full,
-                          }}
-                        >
-                          {lang.instant
-                            ? language === 'hi'
-                              ? 'तुरंत'
-                              : 'Instant'
-                            : language === 'hi'
-                            ? 'धीमा'
-                            : 'Slower'}
-                        </span>
-                        {language === lang.code && (
-                          <Check size={16} color={colors.green.default} />
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </FrostedCard>
-          </div>
-        </div>
-      )}
+      {/* Language Selection Sheet - matches design with grid, checkmark, तुरंत/थोड़ा धीमा */}
+      <LangSheet
+        isOpen={showLangSheet}
+        currentLang={language}
+        onSelect={async (code) => {
+          if (code === 'hi' || code === 'en') setAppLanguage(code);
+          setShowLangSheet(false);
+        }}
+        onClose={() => setShowLangSheet(false)}
+        language={language}
+      />
 
       {/* Animations */}
       <style>

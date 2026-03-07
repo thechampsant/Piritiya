@@ -31,6 +31,8 @@ export interface Settings {
   language: Language;
   voiceInputEnabled: boolean;
   voiceOutputEnabled: boolean;
+  /** When true (default), use AWS Transcribe/Polly when online; when false, use browser voice only. */
+  useAwsVoice?: boolean;
   lastUpdated: number;
 }
 

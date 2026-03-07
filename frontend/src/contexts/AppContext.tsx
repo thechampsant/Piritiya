@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { dbRepository } from '../services/DBRepository';
+import { apiClient } from '../services/APIClient';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import type { Language, Settings } from '../types';
 import { DEFAULT_LANGUAGE, DEFAULT_VOICE_ENABLED } from '../utils/constants';
@@ -23,7 +24,11 @@ interface AppState {
   language: Language;
   isOnline: boolean;
   voiceEnabled: boolean;
+  /** When true (default), use AWS voice when online; when false, use browser voice only. */
+  useAwsVoice: boolean;
   isInstalled: boolean;
+  /** null = not checked yet, true/false = backend health check result */
+  backendAvailable: boolean | null;
 }
 
 interface AppContextValue {
@@ -31,6 +36,8 @@ interface AppContextValue {
   setFarmerId: (id: string) => Promise<void>;
   setLanguage: (lang: Language) => Promise<void>;
   toggleVoice: () => Promise<void>;
+  setUseAwsVoice: (value: boolean) => Promise<void>;
+  retryBackendCheck: () => void;
   isLoading: boolean;
 }
 
@@ -46,7 +53,9 @@ export function AppProvider({ children }: AppProviderProps) {
     language: DEFAULT_LANGUAGE,
     isOnline: true,
     voiceEnabled: DEFAULT_VOICE_ENABLED,
+    useAwsVoice: true,
     isInstalled: false,
+    backendAvailable: null,
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -63,16 +72,18 @@ export function AppProvider({ children }: AppProviderProps) {
         // Initialize database
         await dbRepository.init();
 
-        // For now, we'll check if there's a default settings entry
-        // We'll use a special farmerId 'default' for app-level settings
-        let settings = await dbRepository.getSetting('default');
-        
+        // Load app settings: '' = logged out (onboarding), 'default' = skipped onboarding
+        const loggedOut = await dbRepository.getSetting('');
+        const defaultSettings = await dbRepository.getSetting('default');
+        const settings = loggedOut ?? defaultSettings;
+
         if (settings) {
           setState((prev) => ({
             ...prev,
             farmerId: settings.farmerId,
             language: settings.language,
             voiceEnabled: settings.voiceInputEnabled && settings.voiceOutputEnabled,
+            useAwsVoice: settings.useAwsVoice !== false,
           }));
         }
       } catch (error) {
@@ -94,6 +105,22 @@ export function AppProvider({ children }: AppProviderProps) {
       isOnline,
     }));
   }, [isOnline]);
+
+  /**
+   * Health check backend once when app becomes ready (after settings load)
+   */
+  useEffect(() => {
+    if (!isLoading && isOnline) {
+      apiClient
+        .testConnection()
+        .then((ok) => {
+          setState((prev) => ({ ...prev, backendAvailable: ok }));
+        })
+        .catch(() => {
+          setState((prev) => ({ ...prev, backendAvailable: false }));
+        });
+    }
+  }, [isLoading, isOnline]);
 
   /**
    * Check if app is installed (PWA)
@@ -130,6 +157,7 @@ export function AppProvider({ children }: AppProviderProps) {
         language: state.language,
         voiceInputEnabled: state.voiceEnabled,
         voiceOutputEnabled: state.voiceEnabled,
+        useAwsVoice: state.useAwsVoice,
         lastUpdated: Date.now(),
       };
       
@@ -138,7 +166,7 @@ export function AppProvider({ children }: AppProviderProps) {
       console.error('Failed to save farmer ID:', error);
       throw error;
     }
-  }, [state.language, state.voiceEnabled]);
+  }, [state.language, state.voiceEnabled, state.useAwsVoice]);
 
   /**
    * Set language and persist to IndexedDB
@@ -157,6 +185,7 @@ export function AppProvider({ children }: AppProviderProps) {
         language: lang,
         voiceInputEnabled: state.voiceEnabled,
         voiceOutputEnabled: state.voiceEnabled,
+        useAwsVoice: state.useAwsVoice,
         lastUpdated: Date.now(),
       };
       
@@ -165,7 +194,7 @@ export function AppProvider({ children }: AppProviderProps) {
       console.error('Failed to save language:', error);
       throw error;
     }
-  }, [state.farmerId, state.voiceEnabled]);
+  }, [state.farmerId, state.voiceEnabled, state.useAwsVoice]);
 
   /**
    * Toggle voice enabled state and persist to IndexedDB
@@ -186,6 +215,7 @@ export function AppProvider({ children }: AppProviderProps) {
         language: state.language,
         voiceInputEnabled: newVoiceEnabled,
         voiceOutputEnabled: newVoiceEnabled,
+        useAwsVoice: state.useAwsVoice,
         lastUpdated: Date.now(),
       };
       
@@ -194,13 +224,50 @@ export function AppProvider({ children }: AppProviderProps) {
       console.error('Failed to toggle voice:', error);
       throw error;
     }
+  }, [state.farmerId, state.language, state.voiceEnabled, state.useAwsVoice]);
+
+  /**
+   * Set "use AWS voice when online" and persist.
+   */
+  const setUseAwsVoice = useCallback(async (value: boolean) => {
+    try {
+      setState((prev) => ({ ...prev, useAwsVoice: value }));
+
+      const settings: Settings = {
+        farmerId: state.farmerId || 'default',
+        language: state.language,
+        voiceInputEnabled: state.voiceEnabled,
+        voiceOutputEnabled: state.voiceEnabled,
+        useAwsVoice: value,
+        lastUpdated: Date.now(),
+      };
+      await dbRepository.saveSetting(settings);
+    } catch (error) {
+      console.error('Failed to save useAwsVoice:', error);
+      throw error;
+    }
   }, [state.farmerId, state.language, state.voiceEnabled]);
+
+  /**
+   * Retry backend health check (e.g. from banner).
+   */
+  const retryBackendCheck = useCallback(() => {
+    setState((prev) => ({ ...prev, backendAvailable: null }));
+    if (isOnline) {
+      apiClient
+        .testConnection()
+        .then((ok) => setState((prev) => ({ ...prev, backendAvailable: ok })))
+        .catch(() => setState((prev) => ({ ...prev, backendAvailable: false })));
+    }
+  }, [isOnline]);
 
   const value: AppContextValue = {
     state,
     setFarmerId,
     setLanguage,
     toggleVoice,
+    setUseAwsVoice,
+    retryBackendCheck,
     isLoading,
   };
 

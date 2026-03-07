@@ -197,6 +197,64 @@ export class APIClient {
   }
 
   /**
+   * Transcribe audio to text via backend (Amazon Transcribe).
+   * @param audioBlob - Recorded audio blob (e.g. from MediaRecorder)
+   * @param languageCode - 'hi-IN' or 'en-IN'
+   */
+  async transcribeAudio(
+    audioBlob: Blob,
+    languageCode: string
+  ): Promise<{ transcript: string }> {
+    const url = `${this.baseURL}${API_ENDPOINTS.TRANSCRIBE}`;
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('language_code', languageCode);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`Transcribe failed: ${response.status} ${errBody}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Synthesize speech from text via backend (Amazon Polly).
+   * @returns Blob of audio/mpeg
+   */
+  async synthesizeSpeech(
+    text: string,
+    language: 'hi' | 'en'
+  ): Promise<Blob> {
+    const url = `${this.baseURL}${API_ENDPOINTS.SYNTHESIZE}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`Synthesize failed: ${response.status} ${errBody}`);
+    }
+
+    return response.blob();
+  }
+
+  /**
    * Test connection to backend
    */
   async testConnection(): Promise<boolean> {

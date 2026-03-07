@@ -1,60 +1,61 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { PiritiyaMark } from '@ds/icons';
-import { LangToggle, PillChip, AmbientBg, TeamBadge, AWSBadge } from '@ds/components';
-import { colors, spacing, typography, radii, animation } from '@ds/tokens';
+import { AmbientBg, TeamBadge, AWSBadge } from '@ds/components';
+import { colors, spacing, typography, radii } from '@ds/tokens';
 import { getTranslation } from '../utils/i18n';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { validateFarmerId } from '../utils/validation';
+import LangSheet from './components/LangSheet';
 
 /**
  * OnboardScreen - First-time user onboarding
  * Collects farmer ID and language preference
- * 
+ *
  * Requirements: 25.1, 25.2, 25.3, 25.4, 25.5
  */
 const OnboardScreen = ({ onComplete }) => {
-  const { setFarmerId } = useApp();
+  const { setFarmerId, setLanguage } = useApp();
   const { language } = useLanguage();
-  const { setLanguage } = useApp();
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showLangSheet, setShowLangSheet] = useState(false);
 
-  // Validate farmer ID in real-time
   const validation = validateFarmerId(inputValue);
   const isValid = validation.isValid && inputValue.trim() !== '';
 
   const handleInputChange = (e) => {
-    const value = e.target.value.toUpperCase();
+    const raw = e.target.value;
+    // Allow KSN-YYYY-NNN or UP-... format; uppercase for display when typing UP/letters
+    const value = raw.startsWith('KSN-') ? raw : raw.toUpperCase();
     setInputValue(value);
     setError('');
   };
 
   const handleSubmit = async () => {
     if (!isValid) {
-      setError(validation.error || 'Please enter a valid farmer ID');
+      setError(validation.error || getTranslation('farmerIdInvalid', language));
       return;
     }
-
     try {
       setIsSubmitting(true);
       await setFarmerId(inputValue);
-      if (onComplete) {
-        onComplete();
-      }
+      if (onComplete) onComplete();
     } catch (err) {
       console.error('Failed to save farmer ID:', err);
-      setError('Failed to save farmer ID. Please try again.');
+      setError(
+        language === 'hi'
+          ? 'सहेजने में विफल। पुनः प्रयास करें।'
+          : 'Failed to save. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && isValid && !isSubmitting) {
-      handleSubmit();
-    }
+    if (e.key === 'Enter' && isValid && !isSubmitting) handleSubmit();
   };
 
   return (
@@ -65,115 +66,86 @@ const OnboardScreen = ({ onComplete }) => {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        background: 'linear-gradient(180deg, #F9F8F4 0%, #F0F2ED 50%, #E8EBE6 100%)',
       }}
     >
-      {/* Background gradient */}
       <AmbientBg />
 
-      {/* Main content */}
       <div
         style={{
           position: 'relative',
           zIndex: 1,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'space-between',
           height: '100%',
-          padding: `${spacing['10']} ${spacing.screenPadding}`,
-          animation: `fadeUp ${animation.duration.slow} ${animation.easing.default}`,
+          padding: `${spacing['8']} ${spacing['7']} ${spacing['8']}`,
+          animation: 'fadeUp 0.6s ease',
         }}
       >
-        {/* Top section with logo and form */}
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '320px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            flex: 1,
-            justifyContent: 'center',
-          }}
-        >
-          {/* Logo */}
-          <div style={{ marginBottom: spacing['10'] }}>
-            <PiritiyaMark size={48} color={colors.green.default} />
-          </div>
+        {/* Logo top-left */}
+        <div style={{ marginBottom: spacing['7'] }}>
+          <PiritiyaMark size={28} color={colors.green.default} />
+        </div>
 
-          {/* Welcome text */}
+        {/* Main content */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          {/* Greeting - large, bold sans-serif, dark grey/black per design */}
           <h1
             style={{
-              fontFamily: typography.fonts.serif,
-              fontSize: typography.size.hero,
-              fontWeight: typography.weight.semibold,
-              color: colors.text.primary,
-              textAlign: 'center',
-              marginBottom: spacing['4'],
+              fontFamily: typography.fonts.sans,
+              fontSize: '42px',
+              fontWeight: 700,
+              color: '#1f2937',
+              lineHeight: 1.15,
+              marginBottom: spacing['3'],
+              whiteSpace: 'pre-line',
             }}
           >
-            {language === 'hi' ? 'स्वागत है' : 'Welcome'}
+            {language === 'hi' ? 'नमस्ते,\nकिसान भाई।' : 'Hello,\nFarmer.'}
           </h1>
 
+          {/* Label - Enter your Farmer ID */}
           <p
             style={{
               fontFamily: typography.fonts.sans,
-              fontSize: typography.size.lg,
+              fontSize: typography.size.md,
               color: colors.text.secondary,
-              textAlign: 'center',
-              marginBottom: spacing['10'],
+              marginBottom: spacing['6'],
             }}
           >
-            {language === 'hi' ? 'पिरितिया में आपका स्वागत है' : 'Welcome to Piritiya'}
+            {language === 'hi' ? 'अपनी किसान आईडी डालें' : 'Enter your Farmer ID'}
           </p>
 
           {/* Farmer ID input */}
-          <div style={{ width: '100%', marginBottom: spacing['8'] }}>
-            <label
-              htmlFor="farmerId"
-              style={{
-                display: 'block',
-                fontFamily: typography.fonts.sans,
-                fontSize: typography.size.sm,
-                fontWeight: typography.weight.medium,
-                color: colors.text.primary,
-                marginBottom: spacing['1'],
-              }}
-            >
-              {getTranslation('farmerId', language)}
-            </label>
+          <div style={{ marginBottom: spacing['4'] }}>
             <input
               id="farmerId"
               type="text"
               value={inputValue}
               onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
-              placeholder={getTranslation('farmerIdPlaceholder', language)}
+              onKeyDown={handleKeyPress}
+              placeholder={language === 'hi' ? 'जैसे: KSN-2024-001' : 'e.g.: KSN-2024-001'}
               aria-label={getTranslation('farmerId', language)}
               aria-invalid={error ? 'true' : 'false'}
               aria-describedby={error ? 'farmerId-error' : undefined}
               style={{
                 width: '100%',
-                minHeight: '44px',
-                padding: `${spacing['2']} ${spacing['4']}`,
+                minHeight: '52px',
+                padding: '14px 16px',
                 fontFamily: typography.fonts.sans,
-                fontSize: typography.size.md,
+                fontSize: '15px',
                 color: colors.text.primary,
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                border: `2px solid ${error ? colors.status.error : colors.border.light}`,
-                borderRadius: radii.md,
+                backgroundColor: '#ffffff',
+                border: `1px solid ${error ? colors.status.error : 'rgba(0,0,0,0.12)'}`,
+                borderRadius: radii.lg,
                 outline: 'none',
                 transition: 'border-color 0.2s ease',
               }}
               onFocus={(e) => {
-                if (!error) {
-                  e.target.style.borderColor = colors.green.default;
-                }
+                if (!error) e.target.style.borderColor = colors.green.default;
               }}
               onBlur={(e) => {
-                if (!error) {
-                  e.target.style.borderColor = colors.border.light;
-                }
+                if (!error) e.target.style.borderColor = 'rgba(0,0,0,0.12)';
               }}
             />
             {error && (
@@ -190,70 +162,125 @@ const OnboardScreen = ({ onComplete }) => {
                 {error}
               </p>
             )}
-            <p
-              style={{
-                fontFamily: typography.fonts.sans,
-                fontSize: typography.size.xs,
-                color: colors.text.secondary,
-                marginTop: spacing['1'],
-              }}
-            >
-              {language === 'hi' ? 'उदाहरण: UP-LKO-MLH-00001' : 'Example: UP-LKO-MLH-00001'}
-            </p>
           </div>
 
-          {/* Language toggle */}
-          <div style={{ width: '100%', marginBottom: spacing['10'] }}>
-            <label
-              style={{
-                display: 'block',
-                fontFamily: typography.fonts.sans,
-                fontSize: typography.size.sm,
-                fontWeight: typography.weight.medium,
-                color: colors.text.primary,
-                marginBottom: spacing['1'],
-              }}
-            >
-              {getTranslation('language', language)}
-            </label>
-            <LangToggle
-              currentLang={language}
-              onSelect={setLanguage}
-            />
-          </div>
+          {/* Primary button - vibrant green, Start */}
+          <button
+            onClick={handleSubmit}
+            disabled={!isValid || isSubmitting}
+            style={{
+              width: '100%',
+              padding: '16px',
+              background: isValid && !isSubmitting ? '#15803d' : 'rgba(0,0,0,0.12)',
+              border: 'none',
+              borderRadius: radii.xl,
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: 600,
+              fontFamily: typography.fonts.sans,
+              boxShadow: isValid && !isSubmitting ? '0 2px 8px rgba(21,128,61,0.35)' : 'none',
+              marginBottom: spacing['4'],
+              cursor: isValid && !isSubmitting ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {isSubmitting
+              ? (language === 'hi' ? 'लोड हो रहा है...' : 'Loading...')
+              : (language === 'hi' ? 'शुरू करें' : 'Start')}
+          </button>
 
-          {/* Get Started button */}
-          <div style={{ width: '100%' }}>
-            <PillChip
-              label={language === 'hi' ? 'शुरू करें' : 'Get Started'}
-              onPress={handleSubmit}
-              active={isValid && !isSubmitting}
+          {/* Not now - medium grey link */}
+          <div style={{ textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await setFarmerId('default');
+                  if (onComplete) onComplete();
+                } catch (err) {
+                  console.error('Failed to skip onboarding:', err);
+                }
+              }}
               style={{
-                width: '100%',
-                minHeight: '44px',
+                background: 'none',
+                border: 'none',
+                fontFamily: typography.fonts.sans,
                 fontSize: typography.size.md,
-                fontWeight: typography.weight.semibold,
-                opacity: isValid && !isSubmitting ? 1 : 0.5,
-                cursor: isValid && !isSubmitting ? 'pointer' : 'not-allowed',
+                color: '#6b7280',
+                cursor: 'pointer',
+                padding: '4px',
               }}
-            />
+            >
+              {language === 'hi' ? 'अभी नहीं' : 'Not now'}
+            </button>
           </div>
         </div>
 
-        {/* Bottom badges */}
+        {/* Footer */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: spacing['4'],
-            marginTop: spacing['10'],
+            gap: spacing['3'],
+            paddingTop: spacing['4'],
           }}
         >
-          <TeamBadge />
-          <AWSBadge />
+          {/* Language pill - opens language sheet with all options */}
+          <button
+            type="button"
+            onClick={() => setShowLangSheet(true)}
+            style={{
+              background: 'rgba(0,0,0,0.06)',
+              border: '1px solid rgba(0,0,0,0.1)',
+              borderRadius: radii.full,
+              padding: '6px 14px',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: colors.text.primary,
+              cursor: 'pointer',
+              fontFamily: typography.fonts.sans,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+            aria-haspopup="dialog"
+            aria-expanded={showLangSheet}
+          >
+            {language === 'hi' ? 'हिन्दी' : 'English'}
+            <span style={{ color: colors.text.tertiary, fontSize: '10px' }}>▾</span>
+          </button>
+
+          {/* Divider */}
+          <div style={{ width: '100%', height: '1px', background: 'rgba(0,0,0,0.07)' }} />
+
+          {/* Badges inline */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '20px',
+            }}
+          >
+            <TeamBadge />
+            <div style={{ width: '1px', height: '16px', background: 'rgba(0,0,0,0.1)' }} />
+            <AWSBadge />
+          </div>
         </div>
       </div>
+
+      {/* Language selection sheet - same grid as in Settings */}
+      <LangSheet
+        isOpen={showLangSheet}
+        currentLang={language}
+        onSelect={async (code) => {
+          if (code === 'hi' || code === 'en') await setLanguage(code);
+          setShowLangSheet(false);
+        }}
+        onClose={() => setShowLangSheet(false)}
+        language={language}
+      />
     </div>
   );
 };

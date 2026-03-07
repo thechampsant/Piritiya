@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Language } from '../types';
+import { apiClient } from '../services/APIClient';
 
 interface UseVoiceOutputReturn {
   isSpeaking: boolean;
@@ -8,22 +9,38 @@ interface UseVoiceOutputReturn {
   isSupported: boolean;
 }
 
+export interface UseVoiceOutputOptions {
+  /** When true and online, use backend (Amazon Polly) instead of Web Speech API */
+  useBackend?: boolean;
+}
+
 /**
- * Custom hook for voice output using Web Speech API
+ * Custom hook for voice output using Web Speech API or backend (Amazon Polly)
  * Handles text-to-speech synthesis with browser compatibility detection
- * 
+ *
  * @param language - Language locale ('hi' for Hindi, 'en' for English)
+ * @param options - useBackend: when true, use backend for synthesis
  * @returns Voice output state and control functions
  */
-export function useVoiceOutput(language: Language): UseVoiceOutputReturn {
+export function useVoiceOutput(
+  language: Language,
+  options: UseVoiceOutputOptions = {}
+): UseVoiceOutputReturn {
+  const { useBackend = false } = options;
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
-  
+
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const voicesLoadedRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   // Check browser compatibility on mount
   useEffect(() => {
+    if (useBackend) {
+      setIsSupported(true);
+      return;
+    }
     if ('speechSynthesis' in window) {
       setIsSupported(true);
       
@@ -46,7 +63,7 @@ export function useVoiceOutput(language: Language): UseVoiceOutputReturn {
     } else {
       setIsSupported(false);
     }
-  }, []);
+  }, [useBackend]);
 
   // Get appropriate voice for the locale
   const getVoiceForLocale = useCallback((locale: string): SpeechSynthesisVoice | null => {
@@ -65,68 +82,23 @@ export function useVoiceOutput(language: Language): UseVoiceOutputReturn {
     return voice || null;
   }, []);
 
-  // Speak function
-  const speak = useCallback((text: string) => {
-    if (!isSupported || !text.trim()) {
-      return;
-    }
-
-    // Stop any ongoing speech
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-    }
-
-    // Create new utterance
-    const utterance = new SpeechSynthesisUtterance(text);
-    utteranceRef.current = utterance;
-
-    // Map language to locale
-    const locale = language === 'hi' ? 'hi-IN' : 'en-IN';
-    utterance.lang = locale;
-
-    // Try to set appropriate voice
-    const voice = getVoiceForLocale(locale);
-    if (voice) {
-      utterance.voice = voice;
-    }
-
-    // Configure utterance properties
-    utterance.rate = 0.9; // Slightly slower for better comprehension
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    // Handle utterance events
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-    };
-
-    utterance.onerror = (event) => {
-      console.error('Speech synthesis error:', event.error);
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-    };
-
-    // Start speaking
-    try {
-      window.speechSynthesis.speak(utterance);
-    } catch (error) {
-      console.error('Failed to start speech synthesis:', error);
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-    }
-  }, [isSupported, isSpeaking, language, getVoiceForLocale]);
-
-  // Stop function
+  // Stop function (declared before speak so speak can list it in deps)
   const stop = useCallback(() => {
-    if (!isSupported) {
+    if (useBackend) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setIsSpeaking(false);
       return;
     }
 
+    if (!isSupported) return;
     try {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
@@ -134,7 +106,93 @@ export function useVoiceOutput(language: Language): UseVoiceOutputReturn {
     } catch (error) {
       console.error('Failed to stop speech synthesis:', error);
     }
-  }, [isSupported]);
+  }, [isSupported, useBackend]);
+
+  // Speak function
+  const speak = useCallback(
+    async (text: string) => {
+      if (!isSupported || !text.trim()) {
+        return;
+      }
+
+      if (useBackend) {
+        try {
+          stop();
+          setIsSpeaking(true);
+          const blob = await apiClient.synthesizeSpeech(text, language);
+          const url = URL.createObjectURL(blob);
+          objectUrlRef.current = url;
+          const audio = new Audio(url);
+          audioRef.current = audio;
+          audio.onended = () => {
+            if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+            audioRef.current = null;
+            setIsSpeaking(false);
+          };
+          audio.onerror = () => {
+            if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+            audioRef.current = null;
+            setIsSpeaking(false);
+          };
+          await audio.play();
+        } catch (err) {
+          console.error('Polly synthesis failed, falling back to Web Speech:', err);
+          if (window.speechSynthesis) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = () => setIsSpeaking(false);
+            setIsSpeaking(true);
+            window.speechSynthesis.speak(utterance);
+          } else {
+            setIsSpeaking(false);
+          }
+        }
+        return;
+      }
+
+      // Web Speech path
+      if (isSpeaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utteranceRef.current = utterance;
+
+      const locale = language === 'hi' ? 'hi-IN' : 'en-IN';
+      utterance.lang = locale;
+
+      const voice = getVoiceForLocale(locale);
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        utteranceRef.current = null;
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        utteranceRef.current = null;
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Failed to start speech synthesis:', error);
+        setIsSpeaking(false);
+        utteranceRef.current = null;
+      }
+    },
+    [isSupported, isSpeaking, language, getVoiceForLocale, useBackend, stop]
+  );
 
   // Cleanup on unmount
   useEffect(() => {

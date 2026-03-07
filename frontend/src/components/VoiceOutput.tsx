@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { useVoiceOutput } from '../hooks/useVoiceOutput';
+import { useApp } from '../contexts/AppContext';
+import { VOICE_LANGUAGE_CONFIG } from '../utils/constants';
 import type { Language } from '../types';
 
 // COLORS from mock for consistency
@@ -84,7 +86,13 @@ export function VoiceOutput({
   autoPlay = false,
   onComplete,
 }: VoiceOutputProps) {
-  const { isSpeaking, speak, stop, isSupported } = useVoiceOutput(language);
+  const { state: appState } = useApp();
+  const { isSpeaking, speak, stop, isSupported } = useVoiceOutput(language, {
+    useBackend:
+      appState.isOnline &&
+      appState.useAwsVoice &&
+      (VOICE_LANGUAGE_CONFIG[language]?.polly ?? false),
+  });
 
   // Auto-play when text changes if autoPlay is enabled
   useEffect(() => {

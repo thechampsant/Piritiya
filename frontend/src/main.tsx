@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import { AppProvider, LanguageProvider, ChatProvider } from './contexts'
+import { AppProvider, LanguageProvider, ChatProvider, useApp } from './contexts'
 import ErrorBoundary from './components/ErrorBoundary'
 import { registerSW } from 'virtual:pwa-register'
 import { globalStyles, googleFontsUrl } from '@ds/tokens'
@@ -30,14 +30,22 @@ const updateSW = registerSW({
   },
 })
 
+/** Wrapper so ChatProvider receives farmerId from AppContext (set after onboarding). */
+function AppWithChat() {
+  const { state } = useApp()
+  return (
+    <ChatProvider farmerId={state.farmerId || 'default'}>
+      <App />
+    </ChatProvider>
+  )
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <AppProvider>
         <LanguageProvider>
-          <ChatProvider farmerId="default">
-            <App />
-          </ChatProvider>
+          <AppWithChat />
         </LanguageProvider>
       </AppProvider>
     </ErrorBoundary>

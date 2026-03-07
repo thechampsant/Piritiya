@@ -2,8 +2,8 @@ import { CACHE_SIZE_LIMIT_BYTES } from './constants';
 
 /**
  * Validate farmer ID format
- * Expected format: UP-DISTRICT-BLOCK-XXXXX
- * Example: UP-LUCKNOW-MALIHABAD-00001
+ * Accepts: UP-DISTRICT-BLOCK-XXXXX or KSN-YYYY-NNN
+ * Examples: UP-LUCKNOW-MALIHABAD-00001, KSN-2024-001
  */
 export function validateFarmerId(farmerId: string): {
   isValid: boolean;
@@ -16,12 +16,12 @@ export function validateFarmerId(farmerId: string): {
     };
   }
 
-  // Check format: UP-DISTRICT-BLOCK-XXXXX
-  const pattern = /^UP-[A-Z]+-[A-Z]+-\d{5}$/;
-  if (!pattern.test(farmerId)) {
+  const upPattern = /^UP-[A-Z]+-[A-Z]+-\d{5}$/;
+  const ksnPattern = /^KSN-\d{4}-\d{3}$/;
+  if (!upPattern.test(farmerId) && !ksnPattern.test(farmerId.toUpperCase())) {
     return {
       isValid: false,
-      error: 'Invalid farmer ID format. Expected: UP-DISTRICT-BLOCK-XXXXX',
+      error: 'Invalid farmer ID format. Expected: UP-DISTRICT-BLOCK-XXXXX or KSN-2024-001',
     };
   }
 

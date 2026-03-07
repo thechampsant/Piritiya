@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useApp } from '../contexts/AppContext';
+import { VOICE_LANGUAGE_CONFIG } from '../utils/constants';
 import type { Language } from '../types';
 
 // COLORS from mock for consistency
@@ -87,6 +89,7 @@ export interface VoiceInputProps {
  * @param disabled - Whether the input is disabled
  */
 export function VoiceInput({ language, onTranscript, disabled = false }: VoiceInputProps) {
+  const { state: appState } = useApp();
   const {
     isListening,
     transcript,
@@ -94,7 +97,12 @@ export function VoiceInput({ language, onTranscript, disabled = false }: VoiceIn
     startListening,
     stopListening,
     isSupported,
-  } = useVoiceInput(language);
+  } = useVoiceInput(language, {
+    useBackend:
+      appState.isOnline &&
+      appState.useAwsVoice &&
+      (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
+  });
 
   // Emit transcript to parent when it changes
   useEffect(() => {

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react';
 import { useChat as useChatHook } from '../hooks/useChat';
 import { dbRepository } from '../services/DBRepository';
+import { apiClient } from '../services/APIClient';
 import { getOrCreateSession, createNewSession } from '../utils/session';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import type { Message, PendingQuery } from '../types';
@@ -61,6 +62,22 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
 
   // Use offline sync hook
   const { syncNow, isSyncing } = useOfflineSync();
+
+  /**
+   * Keep apiClient identity in sync with current farmer and session
+   * so all API calls (chat, soil, crop, market, advice) use correct IDs.
+   */
+  useEffect(() => {
+    if (!farmerId) {
+      apiClient.setFarmerId('');
+      apiClient.setSessionId('');
+      return;
+    }
+    if (sessionId) {
+      apiClient.setFarmerId(farmerId);
+      apiClient.setSessionId(sessionId);
+    }
+  }, [farmerId, sessionId]);
 
   /**
    * Initialize or restore session on mount
