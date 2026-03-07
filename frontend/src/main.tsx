@@ -30,7 +30,7 @@ const updateSW = registerSW({
   },
 })
 
-/** Wrapper so ChatProvider receives farmerId from AppContext (set after onboarding). */
+/** Wrapper so ChatProvider receives farmerId from AppContext (set when user taps Start on onboarding). That ID is used for all API calls until the user logs out and signs in again (same or different farmer). Use 'default' when logged out so the app always receives a string and never breaks. */
 function AppWithChat() {
   const { state } = useApp()
   return (

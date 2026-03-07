@@ -89,7 +89,7 @@ export class APIClient {
   }
 
   /**
-   * Send chat message to backend
+   * Send chat message to backend (includes farmer_id so agent can use it for soil/crop etc.)
    */
   async sendChatMessage(message: string, sessionId?: string): Promise<ChatResponse> {
     const request: ChatRequest = {
@@ -98,12 +98,10 @@ export class APIClient {
       farmer_id: this.farmerId,
     };
 
-    const url = `${this.baseURL}${API_ENDPOINTS.CHAT}?message=${encodeURIComponent(message)}${
-      request.session_id ? `&session_id=${request.session_id}` : ''
-    }`;
-
+    const url = `${this.baseURL}${API_ENDPOINTS.CHAT}`;
     return this.fetchWithRetry<ChatResponse>(url, {
       method: 'POST',
+      body: JSON.stringify(request),
     });
   }
 

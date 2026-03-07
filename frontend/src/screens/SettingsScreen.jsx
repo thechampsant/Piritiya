@@ -3,154 +3,48 @@ import {
   AmbientBg,
   SettingSection,
   SettingRow,
-  LangToggle,
-  ToggleSwitch,
   TeamBadge,
   AWSBadge,
-  FrostedCard,
 } from '@ds/components';
-import { colors, spacing, typography, radii, shadows, animation } from '@ds/tokens';
+import { colors, spacing, typography, radii, animation } from '@ds/tokens';
 import { getTranslation, formatNumber } from '../utils/i18n';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { cacheManager } from '../services/CacheManager';
-import { dbRepository } from '../services/DBRepository';
 import LangSheet from './components/LangSheet';
 
 /**
  * SettingsScreen - Settings management with design system components
- * 
- * Features:
- * - Farmer ID management with edit capability
- * - Language selection via LangToggle
- * - Voice input/output toggles
+ * - Farmer ID management with edit capability, Log out
+ * - Language selection via header button (LangSheet)
  * - Storage usage and app version display
- * - Destructive actions (Clear Cache, Clear All Data, Reset App)
- * - Confirmation modal with blurred backdrop
- * 
- * Requirements: 29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7, 29.8, 29.9, 29.10
  */
 const SettingsScreen = ({ onNavigate }) => {
-  const { state: appState, setFarmerId, toggleVoice, setLanguage: setAppLanguage, setUseAwsVoice } = useApp();
+  const { state: appState, setFarmerId, setLanguage: setAppLanguage } = useApp();
   const { language } = useLanguage();
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [farmerIdInput, setFarmerIdInput] = useState(appState.farmerId || '');
   const [cacheSize, setCacheSize] = useState('0 MB');
-  const [voiceInputEnabled, setVoiceInputEnabled] = useState(appState.voiceEnabled);
-  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(appState.voiceEnabled);
   const [showLangSheet, setShowLangSheet] = useState(false);
 
-  // Load cache size on mount
-  useEffect(() => {
-    const loadCacheSize = async () => {
-      try {
-        const sizeMB = await cacheManager.getCacheSizeMB();
-        setCacheSize(`${formatNumber(sizeMB.toFixed(1), language)} MB`);
-      } catch (error) {
-        console.error('Failed to load cache size:', error);
-        setCacheSize('0 MB');
-      }
-    };
+  const loadCacheSize = async () => {
+    try {
+      const sizeMB = await cacheManager.getCacheSizeMB();
+      setCacheSize(`${formatNumber(sizeMB.toFixed(1), language)} MB`);
+    } catch (error) {
+      console.error('Failed to load cache size:', error);
+      setCacheSize('0 MB');
+    }
+  };
 
+  useEffect(() => {
     loadCacheSize();
   }, [language]);
 
-  // Sync farmer ID input with context
-  useEffect(() => {
-    setFarmerIdInput(appState.farmerId || '');
-  }, [appState.farmerId]);
-
-  // Sync voice settings with context
-  useEffect(() => {
-    setVoiceInputEnabled(appState.voiceEnabled);
-    setVoiceOutputEnabled(appState.voiceEnabled);
-  }, [appState.voiceEnabled]);
-
-  // Handle farmer ID change
-  const handleFarmerIdChange = async (value) => {
-    setFarmerIdInput(value);
-    // Save on blur or after a delay
-  };
-
-  // Handle farmer ID save (on blur)
-  const handleFarmerIdSave = async () => {
-    if (farmerIdInput !== appState.farmerId) {
-      try {
-        await setFarmerId(farmerIdInput);
-      } catch (error) {
-        console.error('Failed to save farmer ID:', error);
-      }
-    }
-  };
-
-  // Handle voice input toggle
-  const handleVoiceInputToggle = async (value) => {
-    setVoiceInputEnabled(value);
-    if (value !== appState.voiceEnabled) {
-      await toggleVoice();
-    }
-  };
-
-  // Handle voice output toggle
-  const handleVoiceOutputToggle = async (value) => {
-    setVoiceOutputEnabled(value);
-    if (value !== appState.voiceEnabled) {
-      await toggleVoice();
-    }
-  };
-
-  // Handle clear cache
   const handleClearCache = async () => {
     try {
       await cacheManager.clearCache();
-      // Reload cache size
-      const sizeMB = await cacheManager.getCacheSizeMB();
-      setCacheSize(`${formatNumber(sizeMB.toFixed(1), language)} MB`);
-      setShowConfirmModal(false);
+      await loadCacheSize();
     } catch (error) {
       console.error('Failed to clear cache:', error);
-    }
-  };
-
-  // Handle clear all data
-  const handleClearAllData = async () => {
-    try {
-      await dbRepository.clearAllData();
-      setShowConfirmModal(false);
-      // Reload the app
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to clear all data:', error);
-    }
-  };
-
-  // Handle reset app
-  const handleResetApp = () => {
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-      setShowConfirmModal(false);
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to reset app:', error);
-    }
-  };
-
-  // Confirm destructive action
-  const confirmDestructiveAction = (action) => {
-    setConfirmAction(action);
-    setShowConfirmModal(true);
-  };
-
-  // Execute confirmed action
-  const executeConfirmedAction = () => {
-    if (confirmAction === 'clearCache') {
-      handleClearCache();
-    } else if (confirmAction === 'clearAllData') {
-      handleClearAllData();
-    } else if (confirmAction === 'resetApp') {
-      handleResetApp();
     }
   };
 
@@ -247,73 +141,58 @@ const SettingsScreen = ({ onNavigate }) => {
         </button>
       </div>
 
-      {/* Main content - extra bottom padding so footer isn't cut off by fixed nav */}
+      {/* Main content: flex so footer stays at bottom, with padding so footer is above bottom nav */}
       <div
         style={{
           position: 'relative',
           zIndex: 1,
-          padding: spacing.screenPadding,
-          paddingBottom: '160px',
-          animation: `fadeUp ${animation.duration.slow} ${animation.easing.default}`,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          paddingBottom: '82px', /* match BottomNavigation height so footer is visible above nav */
         }}
       >
-
-        {/* Account Section */}
-        <SettingSection>
-          <h2
-            style={{
-              fontFamily: typography.fonts.sans,
-              fontSize: typography.size.sm,
-              fontWeight: typography.weight.medium,
-              color: colors.text.secondary,
-              marginBottom: spacing['4'],
-              textTransform: 'uppercase',
-              letterSpacing: typography.tracking.wide,
-            }}
-          >
-            {language === 'hi' ? 'खाता' : 'Account'}
-          </h2>
-          <SettingRow label={getTranslation('farmerId', language)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-              <input
-                type="text"
-                value={farmerIdInput}
-                onChange={(e) => handleFarmerIdChange(e.target.value)}
-                placeholder={language === 'hi' ? 'आईडी दर्ज करें' : 'Enter ID'}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontFamily: typography.fonts.sans,
-                  fontSize: typography.size.base,
-                  color: colors.text.primary,
-                  background: 'rgba(0,0,0,0.04)',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  borderRadius: radii.md,
-                  outline: 'none',
-                  padding: '10px 12px',
-                  minHeight: '40px',
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleFarmerIdSave}
+        {/* Scrollable content: generous padding so sections are clearly inset */}
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            paddingTop: spacing.screenPadding,
+            paddingBottom: spacing['6'],
+            paddingLeft: '28px',
+            paddingRight: '28px',
+            minWidth: 0,
+            animation: `fadeUp ${animation.duration.slow} ${animation.easing.default}`,
+          }}
+        >
+          {/* Account Section */}
+          <SettingSection>
+            <div style={{ padding: '24px 20px' }}>
+              <h2
                 style={{
                   fontFamily: typography.fonts.sans,
                   fontSize: typography.size.sm,
-                  fontWeight: typography.weight.semibold,
-                  color: 'white',
-                  background: colors.green.default,
-                  border: 'none',
-                  borderRadius: radii.md,
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  flexShrink: 0,
+                  fontWeight: typography.weight.medium,
+                  color: colors.text.secondary,
+                  marginBottom: spacing['4'],
+                  textTransform: 'uppercase',
+                  letterSpacing: typography.tracking.wide,
                 }}
               >
-                {language === 'hi' ? 'सहेजें' : 'Save'}
-              </button>
-            </div>
-          </SettingRow>
+                {language === 'hi' ? 'खाता' : 'Account'}
+              </h2>
+              <SettingRow label={getTranslation('farmerId', language)}>
+                <span
+                  style={{
+                    fontFamily: typography.fonts.sans,
+                    fontSize: typography.size.base,
+                    color: colors.text.primary,
+                  }}
+                >
+                  {appState.farmerId || '—'}
+                </span>
+              </SettingRow>
 
           {/* Log out - clears farmer ID and redirects to onboarding */}
           <button
@@ -344,55 +223,13 @@ const SettingsScreen = ({ onNavigate }) => {
           >
             {language === 'hi' ? 'लॉग आउट' : 'Log out'}
           </button>
-        </SettingSection>
-
-        {/* Preferences Section */}
-        <SettingSection>
-          <h2
-            style={{
-              fontFamily: typography.fonts.sans,
-              fontSize: typography.size.sm,
-              fontWeight: typography.weight.medium,
-              color: colors.text.secondary,
-              marginBottom: spacing['4'],
-              textTransform: 'uppercase',
-              letterSpacing: typography.tracking.wide,
-            }}
-          >
-            {language === 'hi' ? 'प्राथमिकताएं' : 'Preferences'}
-          </h2>
-          
-          <SettingRow label={getTranslation('language', language)}>
-            <LangToggle
-              lang={language}
-              onPress={() => setShowLangSheet(true)}
-            />
-          </SettingRow>
-
-          <SettingRow label={getTranslation('voiceInput', language)}>
-            <ToggleSwitch
-              value={voiceInputEnabled}
-              onChange={handleVoiceInputToggle}
-            />
-          </SettingRow>
-
-          <SettingRow label={getTranslation('voiceOutput', language)}>
-            <ToggleSwitch
-              value={voiceOutputEnabled}
-              onChange={handleVoiceOutputToggle}
-            />
-          </SettingRow>
-
-          <SettingRow label={language === 'hi' ? 'ऑनलाइन होने पर AWS आवाज़ इस्तेमाल करें' : 'Use AWS voice when online'}>
-            <ToggleSwitch
-              value={appState.useAwsVoice}
-              onChange={(value) => setUseAwsVoice(value)}
-            />
-          </SettingRow>
+            </div>
         </SettingSection>
 
         {/* Storage Section */}
+        <div style={{ marginTop: spacing['8'] }}>
         <SettingSection>
+          <div style={{ padding: '24px 20px' }}>
           <h2
             style={{
               fontFamily: typography.fonts.sans,
@@ -430,118 +267,46 @@ const SettingsScreen = ({ onNavigate }) => {
               1.0.0
             </span>
           </SettingRow>
-        </SettingSection>
-
-        {/* Danger Zone Section */}
-        <SettingSection danger>
-          <h2
-            style={{
-              fontFamily: typography.fonts.sans,
-              fontSize: typography.size.sm,
-              fontWeight: typography.weight.medium,
-              color: colors.status.error,
-              marginBottom: spacing['4'],
-              textTransform: 'uppercase',
-              letterSpacing: typography.tracking.wide,
-            }}
-          >
-            {language === 'hi' ? 'खतरा क्षेत्र' : 'Danger Zone'}
-          </h2>
 
           <button
-            onClick={() => confirmDestructiveAction('clearCache')}
+            type="button"
+            onClick={handleClearCache}
             style={{
               width: '100%',
+              marginTop: spacing['4'],
               fontFamily: typography.fonts.sans,
               fontSize: typography.size.base,
               fontWeight: typography.weight.medium,
-              color: colors.status.error,
-              background: 'transparent',
-              border: `1px solid ${colors.status.error}`,
+              color: colors.text.primary,
+              background: 'rgba(0,0,0,0.04)',
+              border: `1px solid ${colors.border.default}`,
               borderRadius: radii.lg,
               padding: `${spacing['3']} ${spacing['4']}`,
-              marginBottom: spacing['3'],
               cursor: 'pointer',
               minHeight: '44px',
               transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(220, 38, 38, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'transparent';
             }}
           >
             {getTranslation('clearCache', language)}
           </button>
-
-          <button
-            onClick={() => confirmDestructiveAction('clearAllData')}
-            style={{
-              width: '100%',
-              fontFamily: typography.fonts.sans,
-              fontSize: typography.size.base,
-              fontWeight: typography.weight.medium,
-              color: colors.status.error,
-              background: 'transparent',
-              border: `1px solid ${colors.status.error}`,
-              borderRadius: radii.lg,
-              padding: `${spacing['3']} ${spacing['4']}`,
-              marginBottom: spacing['3'],
-              cursor: 'pointer',
-              minHeight: '44px',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(220, 38, 38, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'transparent';
-            }}
-          >
-            {getTranslation('clearAllData', language)}
-          </button>
-
-          <button
-            onClick={() => confirmDestructiveAction('resetApp')}
-            style={{
-              width: '100%',
-              fontFamily: typography.fonts.sans,
-              fontSize: typography.size.base,
-              fontWeight: typography.weight.medium,
-              color: colors.status.error,
-              background: 'transparent',
-              border: `1px solid ${colors.status.error}`,
-              borderRadius: radii.lg,
-              padding: `${spacing['3']} ${spacing['4']}`,
-              cursor: 'pointer',
-              minHeight: '44px',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(220, 38, 38, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'transparent';
-            }}
-          >
-            {language === 'hi' ? 'ऐप रीसेट करें' : 'Reset App'}
-          </button>
+          </div>
         </SettingSection>
+        </div>
+        </div>
 
-        {/* Footer with badges - extra margin so it scrolls fully above bottom nav */}
+        {/* Footer at bottom: ProgrammingInsect | POWERED BY aws */}
         <div
           style={{
-            marginTop: spacing['12'],
-            marginBottom: spacing['4'],
+            flexShrink: 0,
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '20px',
-            paddingTop: spacing['4'],
-            paddingBottom: spacing['4'],
+            padding: `${spacing['4']} ${spacing.screenPadding} 24px`,
+            paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
             borderTop: '1px solid rgba(0,0,0,0.06)',
+            background: 'rgba(255,255,255,0.7)',
           }}
         >
           <TeamBadge />
@@ -549,120 +314,6 @@ const SettingsScreen = ({ onNavigate }) => {
           <AWSBadge />
         </div>
       </div>
-
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: colors.bg.overlay,
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: spacing.screenPadding,
-          }}
-          onClick={() => setShowConfirmModal(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '360px',
-            }}
-          >
-            <FrostedCard>
-              <div
-                style={{
-                  padding: spacing['6'],
-                }}
-              >
-                <h3
-                  style={{
-                    fontFamily: typography.fonts.serif,
-                    fontSize: typography.size.xl,
-                    fontWeight: typography.weight.semibold,
-                    color: colors.text.primary,
-                    marginBottom: spacing['4'],
-                  }}
-                >
-                  {language === 'hi' ? 'पुष्टि करें' : 'Confirm Action'}
-                </h3>
-                <p
-                  style={{
-                    fontFamily: typography.fonts.sans,
-                    fontSize: typography.size.base,
-                    color: colors.text.secondary,
-                    marginBottom: spacing['6'],
-                    lineHeight: typography.leading.relaxed,
-                  }}
-                >
-                  {confirmAction === 'clearCache' &&
-                    (language === 'hi'
-                      ? 'क्या आप वाकई कैश साफ़ करना चाहते हैं? यह ऑफ़लाइन डेटा को हटा देगा।'
-                      : 'Are you sure you want to clear the cache? This will remove offline data.')}
-                  {confirmAction === 'clearAllData' &&
-                    (language === 'hi'
-                      ? 'क्या आप वाकई सभी डेटा साफ़ करना चाहते हैं? यह सभी संदेश और सेटिंग्स को हटा देगा।'
-                      : 'Are you sure you want to clear all data? This will remove all messages and settings.')}
-                  {confirmAction === 'resetApp' &&
-                    (language === 'hi'
-                      ? 'क्या आप वाकई ऐप रीसेट करना चाहते हैं? यह सभी डेटा और सेटिंग्स को हटा देगा।'
-                      : 'Are you sure you want to reset the app? This will remove all data and settings.')}
-                </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: spacing['3'],
-                  }}
-                >
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    style={{
-                      flex: 1,
-                      fontFamily: typography.fonts.sans,
-                      fontSize: typography.size.base,
-                      fontWeight: typography.weight.medium,
-                      color: colors.text.primary,
-                      background: colors.bg.surface,
-                      border: `1px solid ${colors.border.default}`,
-                      borderRadius: radii.lg,
-                      padding: `${spacing['3']} ${spacing['4']}`,
-                      cursor: 'pointer',
-                      minHeight: '44px',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    {getTranslation('cancel', language)}
-                  </button>
-                  <button
-                    onClick={executeConfirmedAction}
-                    style={{
-                      flex: 1,
-                      fontFamily: typography.fonts.sans,
-                      fontSize: typography.size.base,
-                      fontWeight: typography.weight.medium,
-                      color: 'white',
-                      background: colors.status.error,
-                      border: 'none',
-                      borderRadius: radii.lg,
-                      padding: `${spacing['3']} ${spacing['4']}`,
-                      cursor: 'pointer',
-                      minHeight: '44px',
-                      transition: 'all 0.2s ease',
-                      boxShadow: shadows.md,
-                    }}
-                  >
-                    {language === 'hi' ? 'हाँ, जारी रखें' : 'Yes, Continue'}
-                  </button>
-                </div>
-              </div>
-            </FrostedCard>
-          </div>
-        </div>
-      )}
 
       {/* Language Selection Sheet - matches design with grid, checkmark, तुरंत/थोड़ा धीमा */}
       <LangSheet

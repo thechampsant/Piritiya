@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PiritiyaMark } from '@ds/icons';
 import { AmbientBg, TeamBadge, AWSBadge } from '@ds/components';
 import { colors, spacing, typography, radii } from '@ds/tokens';
@@ -6,32 +6,59 @@ import { getTranslation } from '../utils/i18n';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { validateFarmerId } from '../utils/validation';
+import { apiClient } from '../services/APIClient';
 import LangSheet from './components/LangSheet';
+
+/** Fallback farmer IDs when API is unavailable (e.g. offline) */
+const FALLBACK_FARMER_IDS = [
+  'UP-LUCKNOW-MALIHABAD-00001',
+  'UP-KANPUR-GHATAMPUR-00002',
+  'UP-VARANASI-PINDRA-00003',
+];
 
 /**
  * OnboardScreen - First-time user onboarding
- * Collects farmer ID and language preference
+ * Collects farmer ID (from dropdown) and language preference
  *
  * Requirements: 25.1, 25.2, 25.3, 25.4, 25.5
  */
 const OnboardScreen = ({ onComplete }) => {
   const { setFarmerId, setLanguage } = useApp();
   const { language } = useLanguage();
-  const [inputValue, setInputValue] = useState('');
+  const [farmerOptions, setFarmerOptions] = useState([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [loadingFarmers, setLoadingFarmers] = useState(true);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showLangSheet, setShowLangSheet] = useState(false);
 
-  const validation = validateFarmerId(inputValue);
-  const isValid = validation.isValid && inputValue.trim() !== '';
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { farmers } = await apiClient.getFarmers();
+        if (cancelled) return;
+        const list = Array.isArray(farmers) && farmers.length > 0
+          ? farmers.map((f) => ({
+              id: f.farmer_id,
+              label: f.farmer_name ? `${f.farmer_id} – ${f.farmer_name}` : f.farmer_id,
+            }))
+          : FALLBACK_FARMER_IDS.map((id) => ({ id, label: id }));
+        setFarmerOptions(list);
+        if (list.length > 0 && !selectedId) setSelectedId(list[0].id);
+      } catch {
+        if (cancelled) return;
+        setFarmerOptions(FALLBACK_FARMER_IDS.map((id) => ({ id, label: id })));
+        setSelectedId(FALLBACK_FARMER_IDS[0] || '');
+      } finally {
+        if (!cancelled) setLoadingFarmers(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleInputChange = (e) => {
-    const raw = e.target.value;
-    // Allow KSN-YYYY-NNN or UP-... format; uppercase for display when typing UP/letters
-    const value = raw.startsWith('KSN-') ? raw : raw.toUpperCase();
-    setInputValue(value);
-    setError('');
-  };
+  const validation = validateFarmerId(selectedId);
+  const isValid = validation.isValid && selectedId.trim() !== '';
 
   const handleSubmit = async () => {
     if (!isValid) {
@@ -40,7 +67,9 @@ const OnboardScreen = ({ onComplete }) => {
     }
     try {
       setIsSubmitting(true);
-      await setFarmerId(inputValue);
+      setError('');
+      // This ID is stored and used for all API calls (chat, soil, crop, etc.) until the user logs out.
+      await setFarmerId(selectedId);
       if (onComplete) onComplete();
     } catch (err) {
       console.error('Failed to save farmer ID:', err);
@@ -116,15 +145,17 @@ const OnboardScreen = ({ onComplete }) => {
             {language === 'hi' ? 'अपनी किसान आईडी डालें' : 'Enter your Farmer ID'}
           </p>
 
-          {/* Farmer ID input */}
+          {/* Farmer ID dropdown */}
           <div style={{ marginBottom: spacing['4'] }}>
-            <input
+            <select
               id="farmerId"
-              type="text"
-              value={inputValue}
-              onChange={handleInputChange}
+              value={selectedId}
+              onChange={(e) => {
+                setSelectedId(e.target.value);
+                setError('');
+              }}
               onKeyDown={handleKeyPress}
-              placeholder={language === 'hi' ? 'जैसे: KSN-2024-001' : 'e.g.: KSN-2024-001'}
+              disabled={loadingFarmers}
               aria-label={getTranslation('farmerId', language)}
               aria-invalid={error ? 'true' : 'false'}
               aria-describedby={error ? 'farmerId-error' : undefined}
@@ -140,14 +171,20 @@ const OnboardScreen = ({ onComplete }) => {
                 borderRadius: radii.lg,
                 outline: 'none',
                 transition: 'border-color 0.2s ease',
+                cursor: loadingFarmers ? 'wait' : 'pointer',
               }}
-              onFocus={(e) => {
-                if (!error) e.target.style.borderColor = colors.green.default;
-              }}
-              onBlur={(e) => {
-                if (!error) e.target.style.borderColor = 'rgba(0,0,0,0.12)';
-              }}
-            />
+            >
+              <option value="">
+                {loadingFarmers
+                  ? (language === 'hi' ? 'लोड हो रहा है...' : 'Loading...')
+                  : (language === 'hi' ? 'किसान चुनें' : 'Select farmer')}
+              </option>
+              {farmerOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
             {error && (
               <p
                 id="farmerId-error"
@@ -167,20 +204,20 @@ const OnboardScreen = ({ onComplete }) => {
           {/* Primary button - vibrant green, Start */}
           <button
             onClick={handleSubmit}
-            disabled={!isValid || isSubmitting}
+            disabled={!isValid || isSubmitting || loadingFarmers}
             style={{
               width: '100%',
               padding: '16px',
-              background: isValid && !isSubmitting ? '#15803d' : 'rgba(0,0,0,0.12)',
+              background: isValid && !isSubmitting && !loadingFarmers ? '#15803d' : 'rgba(0,0,0,0.12)',
               border: 'none',
               borderRadius: radii.xl,
               color: 'white',
               fontSize: '16px',
               fontWeight: 600,
               fontFamily: typography.fonts.sans,
-              boxShadow: isValid && !isSubmitting ? '0 2px 8px rgba(21,128,61,0.35)' : 'none',
+              boxShadow: isValid && !isSubmitting && !loadingFarmers ? '0 2px 8px rgba(21,128,61,0.35)' : 'none',
               marginBottom: spacing['4'],
-              cursor: isValid && !isSubmitting ? 'pointer' : 'not-allowed',
+              cursor: isValid && !isSubmitting && !loadingFarmers ? 'pointer' : 'not-allowed',
               transition: 'all 0.2s ease',
             }}
           >
@@ -188,32 +225,6 @@ const OnboardScreen = ({ onComplete }) => {
               ? (language === 'hi' ? 'लोड हो रहा है...' : 'Loading...')
               : (language === 'hi' ? 'शुरू करें' : 'Start')}
           </button>
-
-          {/* Not now - medium grey link */}
-          <div style={{ textAlign: 'center' }}>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await setFarmerId('default');
-                  if (onComplete) onComplete();
-                } catch (err) {
-                  console.error('Failed to skip onboarding:', err);
-                }
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontFamily: typography.fonts.sans,
-                fontSize: typography.size.md,
-                color: '#6b7280',
-                cursor: 'pointer',
-                padding: '4px',
-              }}
-            >
-              {language === 'hi' ? 'अभी नहीं' : 'Not now'}
-            </button>
-          </div>
         </div>
 
         {/* Footer */}

@@ -1,14 +1,18 @@
 #!/bin/bash
 # Deploy Lambda functions to AWS
-# Usage: ./lambda_functions/deploy.sh
+# Usage: ./lambda_functions/deploy.sh [function-name]
+#   No args: deploy all (get-soil-moisture, get-crop-advice, get-market-prices)
+#   Or: get-soil-moisture | get-crop-advice | get-market-prices
 
 set -e
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
 ROLE_NAME="PiritiyaLambdaExecutionRole"
+ONLY_FUNCTION="${1:-}"
 
 echo "🚀 Deploying Piritiya Lambda Functions"
 echo "Region: $AWS_REGION"
+[ -n "$ONLY_FUNCTION" ] && echo "Only: $ONLY_FUNCTION"
 echo ""
 
 # Function to create IAM role if it doesn't exist
@@ -122,14 +126,23 @@ deploy_lambda() {
 # Main deployment
 create_lambda_role
 
-# Deploy each Lambda function
-deploy_lambda "get-soil-moisture" "lambda_functions/get_soil_moisture"
-deploy_lambda "get-crop-advice" "lambda_functions/get_crop_advice"
-deploy_lambda "get-market-prices" "lambda_functions/get_market_prices"
+# Deploy Lambda function(s)
+if [ -z "$ONLY_FUNCTION" ]; then
+    deploy_lambda "get-soil-moisture" "lambda_functions/get_soil_moisture"
+    deploy_lambda "get-crop-advice" "lambda_functions/get_crop_advice"
+    deploy_lambda "get-market-prices" "lambda_functions/get_market_prices"
+else
+    case "$ONLY_FUNCTION" in
+        get-soil-moisture) deploy_lambda "get-soil-moisture" "lambda_functions/get_soil_moisture" ;;
+        get-crop-advice)   deploy_lambda "get-crop-advice" "lambda_functions/get_crop_advice" ;;
+        get-market-prices) deploy_lambda "get-market-prices" "lambda_functions/get_market_prices" ;;
+        *) echo "Unknown function: $ONLY_FUNCTION (use get-soil-moisture | get-crop-advice | get-market-prices)"; exit 1 ;;
+    esac
+fi
 
 echo ""
 echo "=================================================="
-echo "✓ All Lambda functions deployed successfully!"
+echo "✓ Lambda function(s) deployed successfully!"
 echo ""
 echo "Next steps:"
 echo "1. Test functions: aws lambda invoke --function-name get-soil-moisture output.json"

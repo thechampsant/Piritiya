@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { FrostedCard, AmbientBg } from '@ds/components';
 import { colors, spacing, typography, radii, animation } from '@ds/tokens';
-import { Send, WifiOff, Archive, Mic, PiritiyaMark } from '@ds/icons';
+import { WifiOff, Archive, Mic, PiritiyaMark } from '@ds/icons';
 import { getTranslation } from '../utils/i18n';
 import { useChatContext } from '../contexts/ChatContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -36,10 +36,8 @@ const ChatScreen = ({ onNavigate }) => {
     useBackend: appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
   });
 
-  const [inputText, setInputText] = useState('');
   const [showLangSheet, setShowLangSheet] = useState(false);
   const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
 
   const { messages, isLoading } = chatState;
 
@@ -68,22 +66,11 @@ const ChatScreen = ({ onNavigate }) => {
   };
 
   const handleSendMessage = async (text) => {
-    const messageText = text || inputText;
-    if (!messageText.trim() || isLoading) return;
-
+    if (!text || !String(text).trim() || isLoading) return;
     try {
-      await sendMessage(messageText.trim());
-      setInputText('');
-      if (inputRef.current) inputRef.current.focus();
+      await sendMessage(String(text).trim());
     } catch (error) {
       console.error('Failed to send message:', error);
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
     }
   };
 
@@ -417,8 +404,7 @@ const ChatScreen = ({ onNavigate }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area - fixed above bottom navigation */}
-      {/* Requirement 27.7: Text input field with Send button and voice input */}
+      {/* Voice-only input area - fixed above bottom navigation */}
       <div
         style={{
           position: 'fixed',
@@ -433,88 +419,49 @@ const ChatScreen = ({ onNavigate }) => {
           WebkitBackdropFilter: 'blur(20px)',
           borderTop: '1px solid rgba(0,0,0,0.06)',
           zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Input pill with mic icon inside */}
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'rgba(0,0,0,0.06)',
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: radii.full,
-              padding: '10px 16px',
-              minHeight: '44px',
-            }}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder={t('type_message')}
-              disabled={isLoading}
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                fontFamily: typography.fonts.sans,
-                fontSize: '14px',
-                color: colors.text.primary,
-              }}
-              aria-label={t('message_input')}
-            />
-            <button
-              onClick={handleVoiceOrbClick}
-              disabled={!appState.voiceEnabled || !isSupported}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: appState.voiceEnabled && isSupported ? 'pointer' : 'not-allowed',
-                opacity: appState.voiceEnabled && isSupported ? (isListening ? 1 : 0.5) : 0.3,
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              aria-label={
-                isListening
-                  ? (language === 'hi' ? 'सुनना बंद करें' : 'Stop listening')
-                  : (language === 'hi' ? 'सुनना शुरू करें' : 'Start listening')
-              }
-            >
-              <Mic size={18} color={isListening ? colors.green.default : 'rgba(0,0,0,0.35)'} />
-            </button>
-          </div>
-
-          {/* Send button */}
-          <button
-            onClick={() => handleSendMessage()}
-            disabled={!inputText.trim() || isLoading}
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: inputText.trim() && !isLoading ? colors.green.default : 'rgba(0,0,0,0.12)',
-              color: 'white',
-              cursor: inputText.trim() && !isLoading ? 'pointer' : 'not-allowed',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              boxShadow: inputText.trim() && !isLoading ? '0 2px 12px rgba(19,136,8,0.3)' : 'none',
-              flexShrink: 0,
-            }}
-            aria-label={t('send_message')}
-          >
-            <Send size={18} color="white" />
-          </button>
-        </div>
+        <button
+          onClick={handleVoiceOrbClick}
+          disabled={!appState.voiceEnabled || !isSupported || isLoading}
+          style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            border: 'none',
+            background: appState.voiceEnabled && isSupported && !isLoading ? colors.green.default : 'rgba(0,0,0,0.12)',
+            color: 'white',
+            cursor: appState.voiceEnabled && isSupported && !isLoading ? 'pointer' : 'not-allowed',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s ease',
+            boxShadow: appState.voiceEnabled && isSupported && !isLoading ? '0 2px 12px rgba(19,136,8,0.3)' : 'none',
+            opacity: appState.voiceEnabled && isSupported ? (isListening ? 1 : 0.9) : 0.5,
+          }}
+          aria-label={
+            isListening
+              ? (language === 'hi' ? 'सुनना बंद करें' : 'Stop listening')
+              : (language === 'hi' ? 'बोलें' : 'Tap to speak')
+          }
+        >
+          <Mic size={24} color="white" />
+        </button>
+        <span
+          style={{
+            fontFamily: typography.fonts.sans,
+            fontSize: typography.size.sm,
+            color: colors.text.tertiary || 'rgba(0,0,0,0.5)',
+          }}
+        >
+          {isListening
+            ? (language === 'hi' ? 'बोलें, फिर टैप करके भेजें' : 'Speak, then tap to send')
+            : (language === 'hi' ? 'बोलने के लिए टैप करें' : 'Tap to speak')}
+        </span>
       </div>
 
       <LangSheet

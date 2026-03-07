@@ -5,6 +5,7 @@ import { dbRepository } from '../services/DBRepository';
 import { apiClient } from '../services/APIClient';
 import { getOrCreateSession, createNewSession } from '../utils/session';
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useApp } from './AppContext';
 import type { Message, PendingQuery } from '../types';
 
 /**
@@ -44,6 +45,7 @@ interface ChatProviderProps {
 }
 
 export function ChatProvider({ children, farmerId }: ChatProviderProps) {
+  const { addQueryToHistory } = useApp();
   const [sessionId, setSessionId] = useState<string>('');
   const [pendingQueries, setPendingQueries] = useState<PendingQuery[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -64,8 +66,8 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
   const { syncNow, isSyncing } = useOfflineSync();
 
   /**
-   * Keep apiClient identity in sync with current farmer and session
-   * so all API calls (chat, soil, crop, market, advice) use correct IDs.
+   * Keep apiClient in sync with current farmer and session.
+   * The farmer ID chosen at onboarding (Start) is used for all API calls until the user logs out.
    */
   useEffect(() => {
     if (!farmerId) {
@@ -73,8 +75,8 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
       apiClient.setSessionId('');
       return;
     }
+    apiClient.setFarmerId(farmerId);
     if (sessionId) {
-      apiClient.setFarmerId(farmerId);
       apiClient.setSessionId(sessionId);
     }
   }, [farmerId, sessionId]);
@@ -144,12 +146,13 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
       }
 
       await sendMessageHook(text);
+      addQueryToHistory(text);
 
       // Update pending queries after sending
       const queries = await dbRepository.getPendingQueries();
       setPendingQueries(queries);
     },
-    [sessionId, sendMessageHook]
+    [sessionId, sendMessageHook, addQueryToHistory]
   );
 
   /**

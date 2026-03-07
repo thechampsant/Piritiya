@@ -21,15 +21,29 @@ import LangSheet from './components/LangSheet';
  * Requirements: 26.1, 26.2, 26.3, 26.4, 26.5, 26.6
  */
 const HomeScreen = ({ onNavigate }) => {
-  const { state: appState, setLanguage } = useApp();
+  const { state: appState, setLanguage, getQueryHistory } = useApp();
   const { sendMessage } = useChatContext();
   const { language } = useLanguage();
+  const [queryHistory, setQueryHistory] = useState([]); // { text, timestamp }[]
+
+  const formatHistoryDate = (ts) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth() && d.getFullYear() === yesterday.getFullYear();
+    const timeStr = d.toLocaleTimeString(language === 'hi' ? 'hi-IN' : 'en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (isToday) return language === 'hi' ? `आज ${timeStr}` : `Today ${timeStr}`;
+    if (isYesterday) return language === 'hi' ? `कल ${timeStr}` : `Yesterday ${timeStr}`;
+    const dateStr = d.toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+    return `${dateStr}, ${timeStr}`;
+  };
   const { isListening, transcript, error: voiceError, startListening, stopListening, isSupported } = useVoiceInput(language, {
     useBackend: appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
   });
 
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
-  const [isVoiceMode, setIsVoiceMode] = useState(true);
   const [showLangSheet, setShowLangSheet] = useState(false);
   const [advisoryPanel, setAdvisoryPanel] = useState(null);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
@@ -37,14 +51,12 @@ const HomeScreen = ({ onNavigate }) => {
 
   const prompts = language === 'hi'
     ? [
-        'आज खरीफ फसल के लिए सही मिट्टी की नमी क्या होनी चाहिए?',
         'इस मौसम में कौन सी फसल बोएं?',
         'आज बाजार के भाव क्या हैं?',
         'भूजल स्तर कम होने पर क्या करें?',
       ]
     : [
-        'What should soil moisture be for Kharif crops today?',
-        'Which crop is best to plant this season?',
+        'What crop should I plant this season on my land?',
         'what are the market prices today?',
         'What to do when groundwater levels are low?',
       ];
@@ -56,6 +68,10 @@ const HomeScreen = ({ onNavigate }) => {
     }, 5500);
     return () => clearInterval(interval);
   }, [prompts.length]);
+
+  useEffect(() => {
+    setQueryHistory(getQueryHistory?.() ?? []);
+  }, [getQueryHistory]);
 
   useEffect(() => {
     if (transcript && transcript.trim() !== '') {
@@ -143,11 +159,6 @@ const HomeScreen = ({ onNavigate }) => {
       id: 'market',
       label: language === 'hi' ? 'बाज़ार भाव' : 'market prices',
       query: language === 'hi' ? 'बाजार के भाव दिखाएं' : 'Show market prices',
-    },
-    {
-      id: 'weather',
-      label: language === 'hi' ? 'मौसम' : 'weather',
-      query: language === 'hi' ? 'मौसम की जानकारी' : 'Weather information',
     },
   ];
 
@@ -372,15 +383,81 @@ const HomeScreen = ({ onNavigate }) => {
           ))}
         </div>
 
-        {/* Orb section: Voice | Mic | Type in one row (flanking layout) */}
+        {/* History of past conversation queries as pill chips */}
         <div
           style={{
             flex: 1,
+            minHeight: 0,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: `0 ${spacing['5']} ${spacing['4']}`,
+            position: 'relative',
+            zIndex: 2,
+          }}
+        >
+          {queryHistory.length > 0 && (
+            <>
+              <p
+                style={{
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.xs,
+                  color: colors.text.tertiary || 'rgba(20,30,16,0.5)',
+                  marginBottom: spacing['2'],
+                  flexShrink: 0,
+                }}
+              >
+                {language === 'hi' ? 'पिछली बातचीत' : 'Past conversations'}
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                  alignContent: 'flex-start',
+                }}
+              >
+                {queryHistory.map((item, i) => (
+                  <div
+                    key={`${i}-${item.timestamp}-${(item.text || '').slice(0, 15)}`}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: '2px',
+                    }}
+                  >
+                    <PillChip
+                      label={(item.text || '').length > 40 ? `${(item.text || '').slice(0, 40)}…` : (item.text || '')}
+                      onPress={() => handleQuerySubmit(item.text)}
+                    />
+                    <span
+                      style={{
+                        fontFamily: typography.fonts.sans,
+                        fontSize: '10px',
+                        color: colors.text.tertiary || 'rgba(20,30,16,0.45)',
+                        paddingLeft: '4px',
+                      }}
+                    >
+                      {formatHistoryDate(item.timestamp)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Orb section: voice only at bottom (above nav) */}
+        <div
+          style={{
+            flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '16px',
+            padding: `${spacing['4']} 0 ${spacing['4']}`,
             position: 'relative',
             zIndex: 2,
           }}
@@ -391,63 +468,9 @@ const HomeScreen = ({ onNavigate }) => {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '16px',
             }}
           >
-            {/* Voice pill - left of orb */}
-            <button
-              onClick={() => setIsVoiceMode(true)}
-              style={{
-                padding: '10px 18px',
-                background: isVoiceMode ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.05)',
-                borderRadius: radii.full,
-                fontSize: '13px',
-                fontWeight: isVoiceMode ? typography.weight.semibold : typography.weight.regular,
-                color: isVoiceMode ? '#1f2937' : 'rgba(20,30,16,0.45)',
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: typography.fonts.sans,
-                boxShadow: isVoiceMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-              {language === 'hi' ? 'आवाज़' : 'voice'}
-            </button>
-
             <VoiceOrb size={72} isListening={isListening} onPress={handleVoiceOrbClick} />
-
-            {/* Type pill - right of orb */}
-            <button
-              onClick={() => setIsVoiceMode(false)}
-              style={{
-                padding: '10px 18px',
-                background: !isVoiceMode ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.05)',
-                borderRadius: radii.full,
-                fontSize: '13px',
-                fontWeight: !isVoiceMode ? typography.weight.semibold : typography.weight.regular,
-                color: !isVoiceMode ? '#1f2937' : 'rgba(20,30,16,0.45)',
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: typography.fonts.sans,
-                boxShadow: !isVoiceMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span style={{ fontSize: '14px', fontWeight: 700, lineHeight: 1 }}>T</span>
-              {language === 'hi' ? 'टाइप' : 'type'}
-            </button>
           </div>
 
           {isListening && (

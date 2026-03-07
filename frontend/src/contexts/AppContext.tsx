@@ -8,14 +8,14 @@ import { DEFAULT_LANGUAGE, DEFAULT_VOICE_ENABLED } from '../utils/constants';
 
 /**
  * AppContext - Global application state provider
- * 
+ *
  * Manages:
- * - Farmer ID
+ * - Farmer ID: set at onboarding (Start); used for all API calls until the user logs out. On logout it is cleared; on next login the user selects same or different farmer from the dropdown.
  * - Language preference
  * - Online/offline status
  * - Voice enabled state
  * - PWA installation status
- * 
+ *
  * Requirements: 5.2, 10.1, 18.1, 18.3
  */
 
@@ -31,6 +31,14 @@ interface AppState {
   backendAvailable: boolean | null;
 }
 
+const QUERY_HISTORY_KEY = 'piritiya_query_history';
+const QUERY_HISTORY_MAX = 20;
+
+export interface QueryHistoryItem {
+  text: string;
+  timestamp: number;
+}
+
 interface AppContextValue {
   state: AppState;
   setFarmerId: (id: string) => Promise<void>;
@@ -38,6 +46,8 @@ interface AppContextValue {
   toggleVoice: () => Promise<void>;
   setUseAwsVoice: (value: boolean) => Promise<void>;
   retryBackendCheck: () => void;
+  addQueryToHistory: (text: string) => void;
+  getQueryHistory: () => QueryHistoryItem[];
   isLoading: boolean;
 }
 
@@ -62,29 +72,47 @@ export function AppProvider({ children }: AppProviderProps) {
   // Use offline sync hook for online status
   const { isOnline } = useOfflineSync();
 
+  const CURRENT_FARMER_KEY = 'piritiya_current_farmer_id';
+
   /**
-   * Load settings from IndexedDB on mount
+   * Load settings from IndexedDB on mount; current farmer ID from localStorage so it persists across refresh.
    * Requirement 5.2, 10.1, 18.1
    */
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        // Initialize database
         await dbRepository.init();
 
-        // Load app settings: '' = logged out (onboarding), 'default' = skipped onboarding
-        const loggedOut = await dbRepository.getSetting('');
-        const defaultSettings = await dbRepository.getSetting('default');
-        const settings = loggedOut ?? defaultSettings;
+        // Prefer current farmer from localStorage (set when user selects from onboarding dropdown)
+        const storedFarmerId = typeof localStorage !== 'undefined' ? localStorage.getItem(CURRENT_FARMER_KEY) : null;
+        const farmerIdToLoad = (storedFarmerId && storedFarmerId.trim() !== '') ? storedFarmerId.trim() : null;
 
-        if (settings) {
-          setState((prev) => ({
-            ...prev,
-            farmerId: settings.farmerId,
-            language: settings.language,
-            voiceEnabled: settings.voiceInputEnabled && settings.voiceOutputEnabled,
-            useAwsVoice: settings.useAwsVoice !== false,
-          }));
+        if (farmerIdToLoad) {
+          const settings = await dbRepository.getSetting(farmerIdToLoad);
+          if (settings) {
+            setState((prev) => ({
+              ...prev,
+              farmerId: settings.farmerId,
+              language: settings.language,
+              voiceEnabled: settings.voiceInputEnabled && settings.voiceOutputEnabled,
+              useAwsVoice: settings.useAwsVoice !== false,
+            }));
+          } else {
+            setState((prev) => ({ ...prev, farmerId: farmerIdToLoad }));
+          }
+        } else {
+          const loggedOut = await dbRepository.getSetting('');
+          const defaultSettings = await dbRepository.getSetting('default');
+          const settings = loggedOut ?? defaultSettings;
+          if (settings) {
+            setState((prev) => ({
+              ...prev,
+              farmerId: settings.farmerId ?? '',
+              language: settings.language,
+              voiceEnabled: settings.voiceInputEnabled && settings.voiceOutputEnabled,
+              useAwsVoice: settings.useAwsVoice !== false,
+            }));
+          }
         }
       } catch (error) {
         console.error('Failed to load settings:', error);
@@ -141,7 +169,7 @@ export function AppProvider({ children }: AppProviderProps) {
   }, []);
 
   /**
-   * Set farmer ID and persist to IndexedDB
+   * Set farmer ID and persist to IndexedDB and localStorage so it loads correctly after refresh.
    * Requirement 5.2, 18.3
    */
   const setFarmerId = useCallback(async (id: string) => {
@@ -151,7 +179,14 @@ export function AppProvider({ children }: AppProviderProps) {
         farmerId: id,
       }));
 
-      // Save to IndexedDB
+      if (typeof localStorage !== 'undefined') {
+        if (id && id.trim() !== '') {
+          localStorage.setItem(CURRENT_FARMER_KEY, id.trim());
+        } else {
+          localStorage.removeItem(CURRENT_FARMER_KEY);
+        }
+      }
+
       const settings: Settings = {
         farmerId: id,
         language: state.language,
@@ -160,7 +195,6 @@ export function AppProvider({ children }: AppProviderProps) {
         useAwsVoice: state.useAwsVoice,
         lastUpdated: Date.now(),
       };
-      
       await dbRepository.saveSetting(settings);
     } catch (error) {
       console.error('Failed to save farmer ID:', error);
@@ -261,6 +295,39 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, [isOnline]);
 
+  const getQueryHistory = useCallback((): QueryHistoryItem[] => {
+    try {
+      if (typeof localStorage === 'undefined') return [];
+      const raw = localStorage.getItem(QUERY_HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item: unknown) => {
+        if (item && typeof item === 'object' && 'text' in item && typeof (item as QueryHistoryItem).text === 'string') {
+          const obj = item as QueryHistoryItem;
+          return { text: obj.text, timestamp: typeof obj.timestamp === 'number' ? obj.timestamp : Date.now() };
+        }
+        return { text: String(item), timestamp: Date.now() };
+      });
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const addQueryToHistory = useCallback((text: string) => {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return;
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const prev = getQueryHistory();
+      const entry: QueryHistoryItem = { text: trimmed, timestamp: Date.now() };
+      const next = [entry, ...prev.filter((item) => item.text !== trimmed)].slice(0, QUERY_HISTORY_MAX);
+      localStorage.setItem(QUERY_HISTORY_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [getQueryHistory]);
+
   const value: AppContextValue = {
     state,
     setFarmerId,
@@ -268,6 +335,8 @@ export function AppProvider({ children }: AppProviderProps) {
     toggleVoice,
     setUseAwsVoice,
     retryBackendCheck,
+    addQueryToHistory,
+    getQueryHistory,
     isLoading,
   };
 

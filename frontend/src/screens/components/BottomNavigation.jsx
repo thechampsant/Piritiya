@@ -21,21 +21,21 @@ const BottomNavigation = ({ currentScreen, onNavigate }) => {
   const tabs = [
     {
       id: 'home',
-      label: language === 'hi' ? 'आज' : 'today',
+      label: language === 'hi' ? 'मुख्य' : 'home',
       Icon: Wheat,
-      ariaLabel: 'Navigate to Today screen',
-    },
-    {
-      id: 'explore',
-      label: language === 'hi' ? 'खोजें' : 'explore',
-      Icon: Compass,
-      ariaLabel: 'Navigate to Explore screen',
+      ariaLabel: 'Navigate to Home screen',
     },
     {
       id: 'chat',
-      label: language === 'hi' ? 'रिकॉर्ड' : 'entries',
+      label: language === 'hi' ? 'चैट' : 'chat',
       Icon: BookOpen,
-      ariaLabel: 'Navigate to Entries screen',
+      ariaLabel: 'Navigate to Chat screen',
+    },
+    {
+      id: 'explore',
+      label: language === 'hi' ? 'समाचार' : 'news',
+      Icon: Compass,
+      ariaLabel: 'Navigate to News screen',
     },
     {
       id: 'settings',

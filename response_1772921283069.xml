@@ -1,0 +1,243 @@
+<?xml version="1.0"?>
+  <result>
+    <created>1627939168</created>
+    <updated>1772777518</updated>
+    <created_date>2021-08-02T21:19:28Z</created_date>
+    <updated_date>2026-03-06T06:11:58Z</updated_date>
+    <active>1</active>
+    <index_name>9ef84268-d588-465a-a308-a864a43d0070</index_name>
+    <org>
+      <item>Ministry of Agriculture and Farmers Welfare</item>
+      <item>Department of Agriculture and Farmers Welfare</item>
+    </org>
+    <org_type>Central</org_type>
+    <source>data.gov.in</source>
+    <title>Current Daily Price of Various Commodities from Various Markets (Mandi)</title>
+    <external_ws_url/>
+    <visualizable>1</visualizable>
+    <field>
+      <item>
+        <name>State</name>
+        <id>state</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>District</name>
+        <id>district</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Market</name>
+        <id>market</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Commodity</name>
+        <id>commodity</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Variety</name>
+        <id>variety</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Grade</name>
+        <id>grade</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Arrival_Date</name>
+        <id>arrival_date</id>
+        <type>date</type>
+      </item>
+      <item>
+        <name>Min_x0020_Price</name>
+        <id>min_price</id>
+        <type>double</type>
+      </item>
+      <item>
+        <name>Max_x0020_Price</name>
+        <id>max_price</id>
+        <type>double</type>
+      </item>
+      <item>
+        <name>Modal_x0020_Price</name>
+        <id>modal_price</id>
+        <type>double</type>
+      </item>
+    </field>
+    <external_ws>0</external_ws>
+    <catalog_uuid>6141ea17-a69d-4713-b600-0a43c8fd9a6c</catalog_uuid>
+    <sector>
+      <item>Agriculture</item>
+      <item>Agricultural Marketing</item>
+    </sector>
+    <target_bucket>
+      <field>9ef84268-d588-465a-a308-a864a43d0070</field>
+      <index>daily_mandi_price</index>
+      <type>6141ea17-a69d-4713-b600-0a43c8fd9a6c</type>
+    </target_bucket>
+    <desc>Current Daily Price of Various Commodities from Various Markets (Mandi)</desc>
+    <field_exposed>
+      <item>
+        <name>State</name>
+        <id>state.keyword</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>District</name>
+        <id>district</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Market</name>
+        <id>market</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Commodity</name>
+        <id>commodity</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Variety</name>
+        <id>variety</id>
+        <type>keyword</type>
+      </item>
+      <item>
+        <name>Grade</name>
+        <id>grade</id>
+        <type>keyword</type>
+      </item>
+    </field_exposed>
+    <message>Resource lists</message>
+    <version>2.2.0</version>
+    <status>ok</status>
+    <total>7611</total>
+    <count>10</count>
+    <limit>10</limit>
+    <offset>10</offset>
+    <records>
+      <item>
+        <state>Rajasthan</state>
+        <district>Ganganagar</district>
+        <market>Sriganganagar (F&amp;V) APMC</market>
+        <commodity>Onion</commodity>
+        <variety>Nasik</variety>
+        <grade>Grade Range-1</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>1400</min_price>
+        <max_price>1800</max_price>
+        <modal_price>1600</modal_price>
+      </item>
+      <item>
+        <state>Rajasthan</state>
+        <district>Ganganagar</district>
+        <market>Sriganganagar (F&amp;V) APMC</market>
+        <commodity>Sweet Potato</commodity>
+        <variety>Sweet Potato</variety>
+        <grade>Grade A</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>5300</min_price>
+        <max_price>5700</max_price>
+        <modal_price>5500</modal_price>
+      </item>
+      <item>
+        <state>Uttar Pradesh</state>
+        <district>Etah</district>
+        <market>Awagarh APMC</market>
+        <commodity>Brinjal</commodity>
+        <variety>Brinjal</variety>
+        <grade>FAQ</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>1400</min_price>
+        <max_price>1500</max_price>
+        <modal_price>1450</modal_price>
+      </item>
+      <item>
+        <state>Uttar Pradesh</state>
+        <district>Badaun</district>
+        <market>Babrala APMC</market>
+        <commodity>Wood</commodity>
+        <variety>Eucalyptus</variety>
+        <grade>Local</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>580</min_price>
+        <max_price>600</max_price>
+        <modal_price>590</modal_price>
+      </item>
+      <item>
+        <state>Assam</state>
+        <district>Nagaon</district>
+        <market>Ambagan APMC</market>
+        <commodity>Green Chilli</commodity>
+        <variety>Green Chilly</variety>
+        <grade>FAQ</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>2550</min_price>
+        <max_price>2750</max_price>
+        <modal_price>2650</modal_price>
+      </item>
+      <item>
+        <state>Assam</state>
+        <district>Nagaon</district>
+        <market>Ambagan APMC</market>
+        <commodity>Raddish</commodity>
+        <variety>Raddish</variety>
+        <grade>FAQ</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>700</min_price>
+        <max_price>900</max_price>
+        <modal_price>800</modal_price>
+      </item>
+      <item>
+        <state>Assam</state>
+        <district>Nagaon</district>
+        <market>Haibargaon APMC</market>
+        <commodity>French Beans(Frasbean)</commodity>
+        <variety>French Beans (Frasbean)</variety>
+        <grade>FAQ</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>1900</min_price>
+        <max_price>2120</max_price>
+        <modal_price>2000</modal_price>
+      </item>
+      <item>
+        <state>Assam</state>
+        <district>Nagaon</district>
+        <market>Haibargaon APMC</market>
+        <commodity>Brinjal</commodity>
+        <variety>Brinjal</variety>
+        <grade>FAQ</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>1800</min_price>
+        <max_price>2100</max_price>
+        <modal_price>1900</modal_price>
+      </item>
+      <item>
+        <state>Tamil Nadu</state>
+        <district>Dharmapuri</district>
+        <market>Karimangalam(Uzhavar Sandhai)</market>
+        <commodity>Brinjal</commodity>
+        <variety>Other</variety>
+        <grade>Local</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>1800</min_price>
+        <max_price>2000</max_price>
+        <modal_price>1900</modal_price>
+      </item>
+      <item>
+        <state>Tamil Nadu</state>
+        <district>Dharmapuri</district>
+        <market>Karimangalam(Uzhavar Sandhai)</market>
+        <commodity>Tomato</commodity>
+        <variety>Local</variety>
+        <grade>Local</grade>
+        <arrival_date>06/03/2026</arrival_date>
+        <min_price>1000</min_price>
+        <max_price>1200</max_price>
+        <modal_price>1100</modal_price>
+      </item>
+    </records>
+  </result>

@@ -68,6 +68,12 @@ class SynthesizeRequest(BaseModel):
     language: str  # "hi" | "en"
 
 
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    farmer_id: Optional[str] = None
+
+
 # Helper function to invoke Lambda
 def invoke_lambda(function_name: str, payload: dict):
     try:
@@ -345,35 +351,44 @@ async def speech_synthesize(request: SynthesizeRequest):
 
 
 @app.post("/chat")
-async def chat_with_agent(message: str, session_id: Optional[str] = None):
+async def chat_with_agent(body: ChatRequest):
     """
-    Chatbot endpoint using Bedrock Agent
-    This is the main endpoint for the conversational interface
+    Chatbot endpoint using Bedrock Agent.
+    Accepts message, session_id, and farmer_id so the agent can use farmer context for soil/crop etc.
     """
     from datetime import datetime
-    
+
+    message = body.message
+    session_id = body.session_id
+    farmer_id = (body.farmer_id or "").strip()
+
     if not session_id:
         session_id = f"session-{int(datetime.now().timestamp())}"
-    
+
     agent_id = os.getenv('BEDROCK_AGENT_ID')
     alias_id = os.getenv('BEDROCK_AGENT_ALIAS_ID')
-    
+
     if not agent_id or not alias_id:
         raise HTTPException(
             status_code=500,
             detail="Bedrock agent not configured. Set BEDROCK_AGENT_ID and BEDROCK_AGENT_ALIAS_ID in .env"
         )
-    
+
+    # Prepend farmer context so the agent can use it when invoking get_soil_moisture / get_crop_advice
+    input_text = message
+    if farmer_id:
+        input_text = f"[Farmer ID: {farmer_id}] {message}"
+
     try:
         bedrock_agent = boto3.client('bedrock-agent-runtime', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        
+
         response = bedrock_agent.invoke_agent(
             agentId=agent_id,
             agentAliasId=alias_id,
             sessionId=session_id,
-            inputText=message
+            inputText=input_text
         )
-        
+
         # Process streaming response
         result = ""
         for event in response['completion']:
@@ -381,13 +396,13 @@ async def chat_with_agent(message: str, session_id: Optional[str] = None):
                 chunk = event['chunk']
                 if 'bytes' in chunk:
                     result += chunk['bytes'].decode('utf-8')
-        
+
         return {
             "response": result,
             "session_id": session_id,
             "message": message
         }
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent invocation failed: {str(e)}")
 
