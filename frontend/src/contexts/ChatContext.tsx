@@ -142,13 +142,13 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
    * Requirement 3.1: Send message to backend
    */
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, options?: { signal?: AbortSignal }) => {
       if (!sessionId) {
         throw new Error('Session not initialized');
       }
 
       addQueryToHistory(text, sessionId);
-      const result = await sendMessageHook(text);
+      const result = await sendMessageHook(text, options);
 
       // Update pending queries after sending
       const queries = await dbRepository.getPendingQueries();

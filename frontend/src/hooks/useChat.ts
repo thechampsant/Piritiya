@@ -29,7 +29,7 @@ interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
   error: string | null;
-  sendMessage: (text: string) => Promise<ChatResponse | undefined>;
+  sendMessage: (text: string, options?: { signal?: AbortSignal }) => Promise<ChatResponse | undefined>;
   clearError: () => void;
 }
 
@@ -82,7 +82,7 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
    * Requirements: 3.2, 4.1, 4.5, 7.4, 7.5, 16.1
    */
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, options?: { signal?: AbortSignal }) => {
       // Requirement 4.5: Prevent duplicate submissions
       if (isSubmittingRef.current || isLoading) {
         return undefined;
@@ -117,7 +117,12 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
         if (isOnline) {
           // Requirement 4.1: Send to API when online
           try {
-            const response = await apiClient.sendChatMessage(text, sessionId);
+            const response = await apiClient.sendChatMessage(
+              text,
+              sessionId,
+              farmerId,
+              { signal: options?.signal }
+            );
 
             // Update user message status to sent
             userMessage.status = 'sent';

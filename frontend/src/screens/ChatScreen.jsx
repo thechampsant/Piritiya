@@ -37,6 +37,7 @@ const ChatScreen = ({ onNavigate }) => {
   const { state: chatState, sendMessage, startNewSession, openSession } = useChatContext();
   const { language, formatTime } = useLanguage();
   const { state: appState, setLanguage } = useApp();
+  const useBackendVoice = appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false);
   const {
     isListening,
     isProcessing,
@@ -47,8 +48,11 @@ const ChatScreen = ({ onNavigate }) => {
     startListening,
     stopListening,
     isSupported,
+    orbState,
+    cancelVoicePipeline,
   } = useVoiceInput(language, {
-    useBackend: appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
+    useBackend: useBackendVoice,
+    sendMessage: useBackendVoice ? sendMessage : undefined,
   });
 
   const [showLangSheet, setShowLangSheet] = useState(false);
@@ -99,15 +103,41 @@ const ChatScreen = ({ onNavigate }) => {
   }, [isLoading]);
 
   useEffect(() => {
+    if (useBackendVoice) return;
     if (transcript && transcript.trim() !== '') {
       handleSendMessage(transcript);
     }
-  }, [transcript]);
+  }, [transcript, useBackendVoice]);
 
   const handleVoiceOrbClick = () => {
     if (!appState.voiceEnabled || !isSupported || isLoading) return;
     if (isListening) stopListening();
     else startListening();
+  };
+
+  const getOrbStatusLabel = () => {
+    switch (orbState) {
+      case 'RECORDING': return t('listening');
+      case 'TRANSCRIBING': return t('voiceOrbTranscribing');
+      case 'THINKING': return t('voiceOrbThinking');
+      case 'SUCCESS': return t('voiceOrbSuccess');
+      case 'ERROR': return t('tryAgain');
+      default: return '';
+    }
+  };
+
+  const getVoiceFeedbackPhase = () => {
+    if (voiceError) return 'error';
+    if (useBackendVoice && orbState !== 'IDLE' && orbState !== 'RECORDING') {
+      if (orbState === 'TRANSCRIBING') return 'transcribing';
+      if (orbState === 'THINKING') return 'thinking';
+      if (orbState === 'SUCCESS') return 'answerReady';
+      if (orbState === 'ERROR') return 'error';
+    }
+    if (showAnswerReady) return 'answerReady';
+    if (isProcessing || isLoading) return 'processing';
+    if (isListening) return 'recording';
+    return 'idle';
   };
 
   const handleSendMessage = async (text) => {
@@ -462,21 +492,15 @@ const ChatScreen = ({ onNavigate }) => {
           isListening={isListening}
           isProcessing={isProcessing || isLoading}
           isError={!!voiceError}
+          orbState={useBackendVoice ? orbState : undefined}
+          statusLabel={useBackendVoice ? getOrbStatusLabel() : undefined}
+          transcriptPreview={useBackendVoice && (orbState === 'TRANSCRIBING' || orbState === 'THINKING') ? transcript : undefined}
+          onCancel={useBackendVoice ? cancelVoicePipeline : undefined}
           onPress={handleVoiceOrbClick}
           label={t('tapToSpeak')}
         />
         <VoiceFeedback
-          phase={
-            voiceError
-              ? 'error'
-              : showAnswerReady
-                ? 'answerReady'
-                : isProcessing
-                  ? 'processing'
-                  : isListening
-                    ? 'recording'
-                    : 'idle'
-          }
+          phase={getVoiceFeedbackPhase()}
           frequencyData={frequencyData}
           recordingStartedAt={recordingStartedAt}
           language={language}

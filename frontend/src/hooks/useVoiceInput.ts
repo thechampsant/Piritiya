@@ -51,6 +51,8 @@ function vibrate(pattern: number | number[]): void {
   }
 }
 
+export type VoiceOrbState = 'IDLE' | 'RECORDING' | 'TRANSCRIBING' | 'THINKING' | 'SUCCESS' | 'ERROR';
+
 interface UseVoiceInputReturn {
   isListening: boolean;
   isProcessing: boolean;
@@ -61,11 +63,29 @@ interface UseVoiceInputReturn {
   startListening: () => void;
   stopListening: () => void;
   isSupported: boolean;
+  /** When useBackend: full pipeline state for orb animation (RECORDING → TRANSCRIBING → THINKING → SUCCESS → IDLE) */
+  orbState: VoiceOrbState;
+  /** Abort in-flight transcribe/chat and return to IDLE (only relevant when orbState is TRANSCRIBING or THINKING) */
+  cancelVoicePipeline: () => void;
 }
 
 export interface UseVoiceInputOptions {
   /** When true and online, use backend (Amazon Transcribe) instead of Web Speech API */
   useBackend?: boolean;
+  /** When useBackend: called with transcript to get chat response; pipeline stays in THINKING until this resolves */
+  sendMessage?: (text: string, options?: { signal?: AbortSignal }) => Promise<unknown>;
+  /** When useBackend: called after SUCCESS state before returning to IDLE (e.g. navigate to chat) */
+  onComplete?: () => void;
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(id);
+      reject(new DOMException('Aborted', 'AbortError'));
+    });
+  });
 }
 
 /**
@@ -80,7 +100,7 @@ export function useVoiceInput(
   language: Language,
   options: UseVoiceInputOptions = {}
 ): UseVoiceInputReturn {
-  const { useBackend = false } = options;
+  const { useBackend = false, sendMessage: sendMessageOpt, onComplete } = options;
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -88,6 +108,7 @@ export function useVoiceInput(
   const [isSupported, setIsSupported] = useState(false);
   const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
   const [frequencyData, setFrequencyData] = useState<number[]>([]);
+  const [orbState, setOrbState] = useState<VoiceOrbState>('IDLE');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -95,6 +116,7 @@ export function useVoiceInput(
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafIdRef = useRef<number | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Check browser compatibility on mount
   useEffect(() => {
@@ -245,6 +267,7 @@ export function useVoiceInput(
       try {
         setTranscript('');
         setError(null);
+        setOrbState('RECORDING');
         setIsListening(true);
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         chunksRef.current = [];
@@ -270,7 +293,6 @@ export function useVoiceInput(
           stream.getTracks().forEach((t) => t.stop());
           mediaRecorderRef.current = null;
           setIsListening(false);
-          setIsProcessing(true);
           setRecordingStartedAt(null);
           setFrequencyData([]);
           if (audioContextRef.current) {
@@ -284,21 +306,77 @@ export function useVoiceInput(
           analyserRef.current = null;
           vibrate([50, 50, 50]);
           if (chunksRef.current.length === 0) {
-            setIsProcessing(false);
+            setOrbState('IDLE');
             return;
           }
           const blob = new Blob(chunksRef.current, { type: mime });
           const languageCode = language === 'hi' ? 'hi-IN' : 'en-IN';
-          try {
-            const result = await apiClient.transcribeAudio(blob, languageCode);
-            setTranscript(result.transcript || '');
-            setError(null);
-          } catch (err) {
-            setError(err instanceof Error ? err : new Error('Transcription failed'));
-            setTranscript('');
-            vibrate([100, 50, 100, 50, 100]);
-          } finally {
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+          const signal = controller.signal;
+          setOrbState('TRANSCRIBING');
+          setIsProcessing(true);
+          setError(null);
+
+          const handleAbort = () => {
+            setOrbState('IDLE');
             setIsProcessing(false);
+            abortControllerRef.current = null;
+          };
+          const handleError = (err: Error) => {
+            setError(err);
+            setOrbState('ERROR');
+            vibrate([100, 50, 100, 50, 100]);
+            setIsProcessing(false);
+            abortControllerRef.current = null;
+            setTimeout(() => setOrbState('IDLE'), 2000);
+          };
+
+          try {
+            const result = await apiClient.transcribeAudio(blob, languageCode, { signal });
+            const text = result.transcript || '';
+            setTranscript(text);
+            if (signal.aborted) {
+              handleAbort();
+              return;
+            }
+            await delay(800, signal);
+            if (signal.aborted) {
+              handleAbort();
+              return;
+            }
+            setOrbState('THINKING');
+            if (!sendMessageOpt) {
+              setOrbState('SUCCESS');
+              await delay(1000);
+              onComplete?.();
+              setOrbState('IDLE');
+              setIsProcessing(false);
+              abortControllerRef.current = null;
+              return;
+            }
+            await sendMessageOpt(text, { signal });
+            if (signal.aborted) {
+              handleAbort();
+              return;
+            }
+            setOrbState('SUCCESS');
+            await delay(1000, signal);
+            if (signal.aborted) {
+              handleAbort();
+              return;
+            }
+            onComplete?.();
+            setOrbState('IDLE');
+            setIsProcessing(false);
+            abortControllerRef.current = null;
+          } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              handleAbort();
+              return;
+            }
+            handleError(err instanceof Error ? err : new Error('Request failed'));
+            return;
           }
         };
 
@@ -334,7 +412,7 @@ export function useVoiceInput(
       setIsListening(false);
       vibrate([100, 50, 100, 50, 100]);
     }
-  }, [isSupported, isListening, useBackend, language]);
+  }, [isSupported, isListening, useBackend, language, sendMessageOpt, onComplete]);
 
   // Stop listening function
   const stopListening = useCallback(() => {
@@ -354,6 +432,16 @@ export function useVoiceInput(
       }
     }
   }, [isListening, useBackend]);
+
+  // Abort in-flight transcribe/chat and return orb to IDLE
+  const cancelVoicePipeline = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setOrbState('IDLE');
+    setIsProcessing(false);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -385,5 +473,7 @@ export function useVoiceInput(
     startListening,
     stopListening,
     isSupported,
+    orbState,
+    cancelVoicePipeline,
   };
 }

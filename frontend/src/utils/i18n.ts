@@ -103,6 +103,18 @@ const translations = {
     en: 'Processing...',
     hi: 'समझ रहा हूँ...',
   },
+  voiceOrbTranscribing: {
+    en: 'Understanding...',
+    hi: 'समझ रहा हूं...',
+  },
+  voiceOrbThinking: {
+    en: 'Thinking...',
+    hi: 'सोच रहा हूं...',
+  },
+  voiceOrbSuccess: {
+    en: 'Got your answer ✓',
+    hi: 'जवाब मिल गया ✓',
+  },
   answerReady: {
     en: 'Answer ready',
     hi: 'जवाब तैयार है',

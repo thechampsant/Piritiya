@@ -4,6 +4,7 @@ import type {
   SoilMoistureData,
   CropAdviceResponse,
   MarketPricesResponse,
+  GovtSchemesResponse,
 } from '../types';
 import {
   API_BASE_URL,
@@ -42,23 +43,28 @@ export class APIClient {
   }
 
   /**
-   * Fetch with retry logic and timeout
+   * Fetch with retry logic and timeout.
+   * If options.signal is provided, the request aborts when that signal or the timeout fires.
    */
   private async fetchWithRetry<T>(
     url: string,
-    options: RequestInit = {},
+    options: RequestInit & { signal?: AbortSignal } = {},
     retryCount: number = 0
   ): Promise<T> {
     const controller = new AbortController();
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort());
+    }
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
     try {
+      const { signal: _omit, ...rest } = options;
       const response = await fetch(url, {
-        ...options,
+        ...rest,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          ...options.headers,
+          ...(rest.headers as Record<string, string>),
         },
       });
 
@@ -90,18 +96,26 @@ export class APIClient {
 
   /**
    * Send chat message to backend (includes farmer_id so agent can use it for soil/crop etc.)
+   * Pass farmerIdOverride to ensure farmer_id is sent for this request (e.g. schemes flow).
+   * Pass options.signal to allow aborting the request (e.g. voice orb cancel).
    */
-  async sendChatMessage(message: string, sessionId?: string): Promise<ChatResponse> {
+  async sendChatMessage(
+    message: string,
+    sessionId?: string,
+    farmerIdOverride?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<ChatResponse> {
     const request: ChatRequest = {
       message,
       session_id: sessionId || this.sessionId,
-      farmer_id: this.farmerId,
+      farmer_id: farmerIdOverride ?? this.farmerId,
     };
 
     const url = `${this.baseURL}${API_ENDPOINTS.CHAT}`;
     return this.fetchWithRetry<ChatResponse>(url, {
       method: 'POST',
       body: JSON.stringify(request),
+      signal: options?.signal,
     });
   }
 
@@ -201,6 +215,25 @@ export class APIClient {
   }
 
   /**
+   * Get government schemes for the farmer (filtered by profile when farmer_id provided).
+   */
+  async getGovtSchemes(
+    farmerId?: string,
+    district?: string
+  ): Promise<GovtSchemesResponse> {
+    const params = new URLSearchParams();
+    const id = farmerId || this.farmerId;
+    if (id) params.append('farmer_id', id);
+    if (district) params.append('district', district);
+
+    const url = `${this.baseURL}${API_ENDPOINTS.GOVT_SCHEMES}${
+      params.toString() ? `?${params.toString()}` : ''
+    }`;
+
+    return this.fetchWithRetry(url);
+  }
+
+  /**
    * Get complete advice (soil moisture + crop advice + market prices)
    */
   async getAdvice(farmerId?: string): Promise<{
@@ -230,10 +263,12 @@ export class APIClient {
    * Transcribe audio to text via backend (Amazon Transcribe).
    * @param audioBlob - Recorded audio blob (e.g. from MediaRecorder)
    * @param languageCode - 'hi-IN' or 'en-IN'
+   * @param options.signal - Optional AbortSignal to cancel the request (e.g. voice orb cancel).
    */
   async transcribeAudio(
     audioBlob: Blob,
-    languageCode: string
+    languageCode: string,
+    options?: { signal?: AbortSignal }
   ): Promise<{ transcript: string }> {
     const url = `${this.baseURL}${API_ENDPOINTS.TRANSCRIBE}`;
     const formData = new FormData();
@@ -241,6 +276,9 @@ export class APIClient {
     formData.append('language_code', languageCode);
 
     const controller = new AbortController();
+    if (options?.signal) {
+      options.signal.addEventListener('abort', () => controller.abort());
+    }
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
     const response = await fetch(url, {
       method: 'POST',

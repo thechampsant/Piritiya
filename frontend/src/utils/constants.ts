@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   SOIL_MOISTURE: '/soil-moisture',
   CROP_ADVICE: '/crop-advice',
   MARKET_PRICES: '/market-prices',
+  GOVT_SCHEMES: '/govt-schemes',
   ADVICE: '/advice',
   HEALTH: '/health',
   TRANSCRIBE: '/speech/transcribe',

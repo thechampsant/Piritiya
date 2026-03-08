@@ -11,7 +11,7 @@ const GREEN = '#138808';
  * Used below VoiceOrb on Home and Chat screens.
  *
  * Props:
- *   phase       'idle' | 'recording' | 'processing' | 'error' | 'answerReady'
+ *   phase       'idle' | 'recording' | 'processing' | 'transcribing' | 'thinking' | 'error' | 'answerReady'
  *   frequencyData  number[] (length 12) for waveform bars; empty when not recording
  *   recordingStartedAt  number | null — timestamp when recording started (for timer)
  *   language    'hi' | 'en'
@@ -40,7 +40,7 @@ export function VoiceFeedback({ phase, frequencyData = [], recordingStartedAt, l
 
   const showWaveform = phase === 'recording' && Array.isArray(frequencyData) && frequencyData.length > 0;
   const showTimer = phase === 'recording' && recordingStartedAt != null;
-  const showProcessingDots = phase === 'processing';
+  const showProcessingDots = phase === 'processing' || phase === 'transcribing' || phase === 'thinking';
 
   return (
     <div

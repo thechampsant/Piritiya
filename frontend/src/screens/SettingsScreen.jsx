@@ -14,6 +14,8 @@ import { cacheManager } from '../services/CacheManager';
 import { dbRepository } from '../services/DBRepository';
 import { apiClient } from '../services/APIClient';
 import { SUPPORT_WHATSAPP_URL } from '../utils/constants';
+import BottomSheet from '../components/BottomSheet';
+import GovtSchemesSheetContent, { isUnhelpfulSchemesResponse } from '../components/GovtSchemesSheetContent';
 
 const CACHE_CLEARED_EVENT = 'piritiya-cache-cleared';
 const SECTION_HEADER_STYLE = {
@@ -75,6 +77,10 @@ const SettingsScreen = ({ onNavigate }) => {
       return true;
     }
   });
+  const [schemesSheetOpen, setSchemesSheetOpen] = useState(false);
+  const [schemesLoading, setSchemesLoading] = useState(false);
+  const [schemesError, setSchemesError] = useState(null);
+  const [schemesResponseText, setSchemesResponseText] = useState('');
 
   const loadCacheSize = async () => {
     try {
@@ -298,6 +304,61 @@ const SettingsScreen = ({ onNavigate }) => {
                   }}
                 >
                   {getTranslation('logOut', language)}
+                </button>
+              </div>
+            </SettingSection>
+          </div>
+
+          {/* ─── My Benefits ───────────────────────────────────────────── */}
+          <div style={{ marginBottom: spacing['8'] }}>
+            <h2 style={SECTION_HEADER_STYLE}>{language === 'hi' ? 'मेरे लाभ' : 'My Benefits'}</h2>
+            <SettingSection>
+              <div style={{ padding: '16px 20px' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSchemesSheetOpen(true);
+                    setSchemesLoading(true);
+                    setSchemesError(null);
+                    setSchemesResponseText('');
+                    const sessionId = `session-${Date.now()}`;
+                    try {
+                      const res = await apiClient.sendChatMessage(
+                        'What government schemes am I eligible for?',
+                        sessionId,
+                        appState.farmerId || undefined
+                      );
+                      const text = typeof res?.response === 'string' ? res.response : '';
+                      if (isUnhelpfulSchemesResponse(text)) {
+                        setSchemesError('Agent could not help');
+                        setSchemesResponseText('');
+                      } else {
+                        setSchemesResponseText(text);
+                      }
+                    } catch (err) {
+                      setSchemesError(err?.message || 'Request failed');
+                    } finally {
+                      setSchemesLoading(false);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 0',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: typography.fonts.sans,
+                    fontSize: typography.size.base,
+                    color: colors.text.primary,
+                    minHeight: ROW_MIN_HEIGHT,
+                    textAlign: 'left',
+                  }}
+                >
+                  <span>{language === 'hi' ? 'पात्र योजनाएं देखें' : 'Check eligible schemes'}</span>
+                  <span style={{ color: colors.text.tertiary }} aria-hidden>→</span>
                 </button>
               </div>
             </SettingSection>
@@ -851,6 +912,62 @@ const SettingsScreen = ({ onNavigate }) => {
           </div>
         </div>
       )}
+
+      {/* Govt Schemes bottom sheet (from My Benefits) */}
+      <BottomSheet
+        isOpen={schemesSheetOpen}
+        onClose={() => setSchemesSheetOpen(false)}
+        showDragHandle={false}
+        header={
+          <div
+            style={{
+              flexShrink: 0,
+              padding: spacing['4'],
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid rgba(0,0,0,0.08)',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: typography.fonts.sans,
+                fontWeight: 600,
+                fontSize: typography.size.lg,
+                color: '#1f2937',
+              }}
+            >
+              {language === 'hi' ? 'सरकारी योजनाएं' : 'Govt Schemes'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSchemesSheetOpen(false)}
+              onPointerDown={(e) => { e.preventDefault(); setSchemesSheetOpen(false); }}
+              onTouchEnd={(e) => { e.preventDefault(); setSchemesSheetOpen(false); }}
+              style={{
+                padding: '8px 16px',
+                fontFamily: typography.fonts.sans,
+                fontSize: 14,
+                color: '#6b7280',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {language === 'hi' ? 'बंद करें' : 'Close'}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ padding: spacing['4'] }}>
+          <GovtSchemesSheetContent
+            loading={schemesLoading}
+            error={!!schemesError}
+            responseText={schemesResponseText}
+            language={language}
+          />
+        </div>
+      </BottomSheet>
 
       <style>
         {`

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Deploy Lambda functions to AWS
 # Usage: ./lambda_functions/deploy.sh [function-name]
-#   No args: deploy all (get-soil-moisture, get-crop-advice, get-market-prices)
-#   Or: get-soil-moisture | get-crop-advice | get-market-prices
+#   No args: deploy all (get-soil-moisture, get-crop-advice, get-market-prices, get-govt-schemes)
+#   Or: get-soil-moisture | get-crop-advice | get-market-prices | get-govt-schemes
 
 set -e
 
@@ -131,12 +131,14 @@ if [ -z "$ONLY_FUNCTION" ]; then
     deploy_lambda "get-soil-moisture" "lambda_functions/get_soil_moisture"
     deploy_lambda "get-crop-advice" "lambda_functions/get_crop_advice"
     deploy_lambda "get-market-prices" "lambda_functions/get_market_prices"
+    deploy_lambda "get-govt-schemes" "lambda_functions/get_govt_schemes"
 else
     case "$ONLY_FUNCTION" in
         get-soil-moisture) deploy_lambda "get-soil-moisture" "lambda_functions/get_soil_moisture" ;;
         get-crop-advice)   deploy_lambda "get-crop-advice" "lambda_functions/get_crop_advice" ;;
         get-market-prices) deploy_lambda "get-market-prices" "lambda_functions/get_market_prices" ;;
-        *) echo "Unknown function: $ONLY_FUNCTION (use get-soil-moisture | get-crop-advice | get-market-prices)"; exit 1 ;;
+        get-govt-schemes)  deploy_lambda "get-govt-schemes" "lambda_functions/get_govt_schemes" ;;
+        *) echo "Unknown function: $ONLY_FUNCTION (use get-soil-moisture | get-crop-advice | get-market-prices | get-govt-schemes)"; exit 1 ;;
     esac
 fi
 
@@ -145,7 +147,7 @@ echo "=================================================="
 echo "✓ Lambda function(s) deployed successfully!"
 echo ""
 echo "Next steps:"
-echo "1. Test functions: aws lambda invoke --function-name get-soil-moisture output.json"
-echo "2. Configure Bedrock Agent with these Lambda functions"
-echo "3. View logs: aws logs tail /aws/lambda/get-soil-moisture --follow"
+echo "1. Test: aws lambda invoke --function-name get-govt-schemes --cli-binary-format raw-in-base64-out --payload '{\"farmer_id\":\"UP-LUCKNOW-MALIHABAD-00001\",\"district\":\"Lucknow\"}' output.json && cat output.json | jq ."
+echo "2. Configure Bedrock Agent with these Lambda functions (add get-govt-schemes if needed)"
+echo "3. View logs: aws logs tail /aws/lambda/get-govt-schemes --follow"
 echo ""

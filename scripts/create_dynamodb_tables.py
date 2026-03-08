@@ -145,6 +145,36 @@ def create_consultations_table():
             print(f"✗ Error creating Consultations table: {e}")
             return False
 
+def create_govt_schemes_table():
+    """Create GovtSchemes table (district PK, scheme_id SK). No seeding — Lambda uses hardcoded fallback until populated."""
+    try:
+        response = dynamodb.create_table(
+            TableName='GovtSchemes',
+            KeySchema=[
+                {'AttributeName': 'district', 'KeyType': 'HASH'},
+                {'AttributeName': 'scheme_id', 'KeyType': 'RANGE'}
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'district', 'AttributeType': 'S'},
+                {'AttributeName': 'scheme_id', 'AttributeType': 'S'}
+            ],
+            BillingMode='PAY_PER_REQUEST',
+            Tags=[
+                {'Key': 'Project', 'Value': 'Piritiya'},
+                {'Key': 'Environment', 'Value': 'Development'}
+            ]
+        )
+        print(f"✓ Created GovtSchemes table: {response['TableDescription']['TableArn']}")
+        return True
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ResourceInUseException':
+            print("✓ GovtSchemes table already exists")
+            return True
+        else:
+            print(f"✗ Error creating GovtSchemes table: {e}")
+            return False
+
+
 def main():
     """Create all DynamoDB tables"""
     print("Creating DynamoDB tables for Piritiya...\n")
@@ -153,7 +183,8 @@ def main():
         create_farmers_table(),
         create_nisar_data_table(),
         create_crop_recommendations_table(),
-        create_consultations_table()
+        create_consultations_table(),
+        create_govt_schemes_table()
     ]
     
     if all(results):

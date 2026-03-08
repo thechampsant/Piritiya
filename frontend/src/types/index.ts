@@ -126,6 +126,21 @@ export interface MarketPricesResponse {
   note: string;
 }
 
+export interface GovtScheme {
+  name: string;
+  emoji: string;
+  benefit: string;
+  eligibility: string;
+  how_to_apply: string;
+  deadline: string;
+}
+
+export interface GovtSchemesResponse {
+  formatted_summary: string;
+  schemes: GovtScheme[];
+  district: string;
+}
+
 // State models
 export interface AppState {
   farmerId: string;

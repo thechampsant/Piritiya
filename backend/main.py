@@ -99,6 +99,7 @@ def root():
             "soil_moisture": "/soil-moisture/{farmer_id}",
             "crop_advice": "/crop-advice",
             "market_prices": "/market-prices",
+            "govt_schemes": "/govt-schemes",
             "speech_transcribe": "/speech/transcribe",
             "speech_synthesize": "/speech/synthesize"
         }
@@ -261,6 +262,30 @@ def get_market_prices(crop: Optional[str] = None, district: Optional[str] = None
         except (ValueError, TypeError):
             raise HTTPException(status_code=result.get('statusCode', 500), detail=result['body'])
     return result
+
+
+@app.get("/govt-schemes")
+def get_govt_schemes(farmer_id: Optional[str] = None, district: Optional[str] = None):
+    """Get government schemes for farmers (DynamoDB-first, hardcoded fallback)."""
+    payload = {}
+    if farmer_id:
+        payload["farmer_id"] = farmer_id
+    if district:
+        payload["district"] = district
+    result = invoke_lambda("get-govt-schemes", payload)
+    if isinstance(result, dict) and result.get("statusCode") == 200 and "body" in result:
+        return json.loads(result["body"])
+    if isinstance(result, dict) and result.get("statusCode") != 200 and "body" in result:
+        try:
+            err = json.loads(result["body"])
+            raise HTTPException(
+                status_code=result.get("statusCode", 500),
+                detail=err.get("error", result["body"]),
+            )
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=result.get("statusCode", 500), detail=result["body"])
+    return result
+
 
 @app.get("/advice/{farmer_id}")
 def get_complete_advice(farmer_id: str):

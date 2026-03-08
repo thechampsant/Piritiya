@@ -28,28 +28,83 @@ export const AmbientBg = () => (
 );
 
 // ─── VOICE ORB ────────────────────────────────────────────────────────────────
-// The central voice input button. Three states: idle (soft pulse + green glow),
-// recording (faster pulse + green ripples), processing (spinning green border).
+// The central voice input button. States: IDLE, RECORDING (red ripples), TRANSCRIBING (spinning),
+// THINKING (green breath), SUCCESS (green flash), ERROR (red pulse). Optional orbState drives
+// animation when provided; otherwise falls back to isListening / isProcessing / isError.
 //
 // Props:
-//   isListening   boolean  — active recording state
-//   isProcessing  boolean  — loading after recording (spinning border, no pulse)
+//   isListening   boolean  — active recording (legacy)
+//   isProcessing  boolean  — loading (legacy)
+//   isError       boolean  — error state (legacy)
+//   orbState      string   — 'IDLE'|'RECORDING'|'TRANSCRIBING'|'THINKING'|'SUCCESS'|'ERROR' (optional, overrides above)
+//   statusLabel   string   — label for current orb state (e.g. "सुन रहा हूं...")
+//   transcriptPreview string — small grey text above orb during TRANSCRIBING/THINKING
+//   onCancel      function — cancel button handler (shown when TRANSCRIBING or THINKING)
 //   onPress       function — tap handler
 //   size          number   — orb diameter in px (default: 72)
-//   label         string   — optional "Tap to speak" / "बोलें" below orb (idle only, fades with pulse)
-//   isError      boolean  — error state: red pulsing orb
+//   label         string   — idle label "Tap to speak" (when orbState is IDLE or not provided)
 const GREEN_RING = "rgba(19,136,8,0.5)";
 const GREEN_GLOW = "rgba(19,136,8,0.25)";
+const RED_RING = "rgba(220,38,38,0.5)";
 
-export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = false, onPress, size = 72, label }) => {
-  const isIdle = !isError && !isProcessing && !isListening;
-  const isRecording = !isError && !isProcessing && isListening;
+export const VoiceOrb = ({
+  isListening = false,
+  isProcessing = false,
+  isError = false,
+  orbState: orbStateProp,
+  statusLabel,
+  transcriptPreview,
+  onCancel,
+  onPress,
+  size = 72,
+  label,
+}) => {
+  const orbState = orbStateProp ?? (isError ? "ERROR" : isProcessing ? "TRANSCRIBING" : isListening ? "RECORDING" : "IDLE");
+  const isIdle = orbState === "IDLE";
+  const isRecording = orbState === "RECORDING";
+  const isTranscribing = orbState === "TRANSCRIBING";
+  const isThinking = orbState === "THINKING";
+  const isSuccess = orbState === "SUCCESS";
+  const isErrorState = orbState === "ERROR";
+  const showCancel = (isTranscribing || isThinking) && onCancel;
 
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+      {/* Transcript preview — grey label above orb */}
+      {transcriptPreview && (isTranscribing || isThinking) && (
+        <span
+          style={{
+            fontFamily: typography.fonts.sans,
+            fontSize: typography.size.xs,
+            color: colors.text.tertiary || "rgba(20,30,16,0.5)",
+            maxWidth: "90%",
+            textAlign: "center",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {transcriptPreview}
+        </span>
+      )}
       <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {/* Green ripple rings — recording: same size as button, expand outward */}
+        {/* Red ripple rings — RECORDING */}
         {isRecording && [0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              width: `${size}px`,
+              height: `${size}px`,
+              borderRadius: "50%",
+              border: `2px solid ${RED_RING}`,
+              animation: `orbRippleRed 0.9s ease-out ${i * 0.3}s infinite`,
+              pointerEvents: "none",
+            }}
+          />
+        ))}
+        {/* Green ripple rings — legacy recording when orbState not used */}
+        {!orbStateProp && !isError && isProcessing === false && isListening && [0, 1, 2].map((i) => (
           <div
             key={i}
             style={{
@@ -63,7 +118,7 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
             }}
           />
         ))}
-        {/* Idle ring — green glow, pulses with idle */}
+        {/* Idle ring — green glow */}
         {isIdle && (
           <div
             style={{
@@ -77,8 +132,8 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
             }}
           />
         )}
-        {/* Spinning border — processing (hide when error) */}
-        {!isError && isProcessing && (
+        {/* Spinning border — TRANSCRIBING (or legacy isProcessing) */}
+        {(isTranscribing || (!orbStateProp && isProcessing && !isError)) && (
           <div
             style={{
               position: "absolute",
@@ -93,6 +148,34 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
             }}
           />
         )}
+        {/* Cancel button — TRANSCRIBING / THINKING */}
+        {showCancel && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCancel(); }}
+            style={{
+              position: "absolute",
+              top: -6,
+              right: -6,
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0,0,0,0.5)",
+              color: "#fff",
+              fontSize: 16,
+              cursor: "pointer",
+              zIndex: 2,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              lineHeight: 1,
+            }}
+            aria-label="Cancel"
+          >
+            ✕
+          </button>
+        )}
         {/* Orb button */}
         <button
           onClick={onPress}
@@ -104,19 +187,46 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
             cursor: "pointer",
             position: "relative",
             overflow: "hidden",
-            background: isError ? colors.orb.error : (isRecording ? colors.orb.active : colors.orb.idle),
-            boxShadow: isError ? colors.orb.shadowError : (isRecording ? colors.orb.shadowActive : colors.orb.shadowIdle),
-            animation: isError
-              ? "orbErrorPulse 1.2s ease-in-out infinite"
-              : isProcessing
-                ? "none"
+            background: isErrorState
+              ? colors.orb.error
+              : isRecording
+                ? colors.orb.error
+                : isThinking
+                  ? colors.orb.active
+                  : isSuccess
+                    ? colors.orb.active
+                    : isIdle
+                      ? colors.orb.idle
+                      : colors.orb.idle,
+            boxShadow: isErrorState
+              ? colors.orb.shadowError
+              : isSuccess
+                ? "0 0 0 4px rgba(19,136,8,0.3)"
                 : isRecording
-                  ? "orbActive 0.8s ease-in-out infinite"
-                  : "orbIdle 2s ease-in-out infinite",
+                  ? colors.orb.shadowError
+                  : isThinking
+                    ? colors.orb.shadowActive
+                    : isIdle
+                      ? colors.orb.shadowIdle
+                      : colors.orb.shadowIdle,
+            animation: isErrorState
+              ? "orbErrorPulse 1.2s ease-in-out infinite"
+              : isSuccess
+                ? "orbSuccessFlash 0.6s ease-out forwards"
+                : isThinking
+                  ? "orbBreathSlow 2.5s ease-in-out infinite"
+                  : isTranscribing
+                    ? "none"
+                    : isRecording
+                      ? "orbErrorPulse 1.2s ease-in-out infinite"
+                      : !orbStateProp && isProcessing
+                        ? "none"
+                        : !orbStateProp && isListening
+                          ? "orbActive 0.8s ease-in-out infinite"
+                          : "orbIdle 2s ease-in-out infinite",
             transition: "box-shadow 0.4s ease, background 0.4s ease",
           }}
         >
-          {/* Inner highlight shimmer */}
           <div
             style={{
               position: "absolute",
@@ -130,7 +240,6 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
               transform: "rotate(-20deg)",
             }}
           />
-          {/* Mic icon — Ashoka Chakra navy, fades on listen */}
           <div
             style={{
               position: "absolute",
@@ -138,7 +247,7 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              opacity: isRecording ? 0 : 0.8,
+              opacity: isRecording || isTranscribing || isThinking || isSuccess ? 0 : 0.8,
               transition: "opacity 0.3s ease",
             }}
           >
@@ -146,7 +255,19 @@ export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = 
           </div>
         </button>
       </div>
-      {/* Label — "Tap to speak" / "बोलें", fades in/out with idle pulse; only when idle */}
+      {/* Status label — statusLabel when provided and not idle; else idle label */}
+      {statusLabel && !isIdle && (
+        <span
+          style={{
+            fontFamily: typography.fonts.sans,
+            fontSize: typography.size.sm,
+            color: isErrorState ? colors.status.error : colors.text.secondary,
+          }}
+        >
+          {statusLabel}
+        </span>
+      )}
+      {/* Idle label — "Tap to speak" when IDLE */}
       {label && isIdle && (
         <span
           style={{

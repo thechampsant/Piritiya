@@ -12,6 +12,7 @@ import { VOICE_LANGUAGE_CONFIG } from '../utils/constants';
 import SoilMoistureDisplay from '../components/SoilMoistureDisplay';
 import CropRecommendationList from '../components/CropRecommendationList';
 import MarketPriceTable from '../components/MarketPriceTable';
+import GovtSchemesSheetContent, { isUnhelpfulSchemesResponse } from '../components/GovtSchemesSheetContent';
 import VoiceFeedback from '../components/VoiceFeedback';
 import LangSheet from './components/LangSheet';
 import BottomSheet from '../components/BottomSheet';
@@ -46,7 +47,7 @@ function getPreviewWords(str, maxWords = 6) {
 
 const HomeScreen = ({ onNavigate }) => {
   const { state: appState, setLanguage, getQueryHistory, clearQueryHistory } = useApp();
-  const { sendMessage } = useChatContext();
+  const { state: chatState, sendMessage } = useChatContext();
   const { language } = useLanguage();
   const [queryHistory, setQueryHistory] = useState([]); // { text, timestamp }[]
   const [farmerName, setFarmerName] = useState(null); // from backend for greeting
@@ -65,6 +66,7 @@ const HomeScreen = ({ onNavigate }) => {
     const dateStr = d.toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
     return `${dateStr}, ${timeStr}`;
   };
+  const useBackendVoice = appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false);
   const {
     isListening,
     isProcessing,
@@ -75,8 +77,12 @@ const HomeScreen = ({ onNavigate }) => {
     startListening,
     stopListening,
     isSupported,
+    orbState,
+    cancelVoicePipeline,
   } = useVoiceInput(language, {
-    useBackend: appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
+    useBackend: useBackendVoice,
+    sendMessage: useBackendVoice ? sendMessage : undefined,
+    onComplete: useBackendVoice && onNavigate ? () => onNavigate('chat') : undefined,
   });
 
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
@@ -161,8 +167,9 @@ const HomeScreen = ({ onNavigate }) => {
     setShowClearHistoryConfirm(false);
   };
 
-  // Answer ready: when transcript arrives, show "Answer ready", beep, vibrate, then submit and navigate after 1.5s
+  // Answer ready: when transcript arrives, show "Answer ready", beep, vibrate, then submit and navigate after 1.5s (Web Speech path only; backend path is owned by useVoiceInput pipeline)
   useEffect(() => {
+    if (useBackendVoice) return;
     if (!transcript || transcript.trim() === '') return;
     setShowAnswerReady(true);
     playVoiceBeep('complete');
@@ -176,12 +183,37 @@ const HomeScreen = ({ onNavigate }) => {
       setShowAnswerReady(false);
     }, 1500);
     return () => clearTimeout(t);
-  }, [transcript]); // eslint-disable-line react-hooks/exhaustive-deps -- handleQuerySubmit, onNavigate stable
+  }, [transcript, useBackendVoice]); // eslint-disable-line react-hooks/exhaustive-deps -- handleQuerySubmit, onNavigate stable
 
   const handleVoiceOrbClick = () => {
     if (!appState.voiceEnabled || !isSupported) return;
     if (isListening) stopListening();
     else startListening();
+  };
+
+  const getOrbStatusLabel = () => {
+    switch (orbState) {
+      case 'RECORDING': return getTranslation('listening', language);
+      case 'TRANSCRIBING': return getTranslation('voiceOrbTranscribing', language);
+      case 'THINKING': return getTranslation('voiceOrbThinking', language);
+      case 'SUCCESS': return getTranslation('voiceOrbSuccess', language);
+      case 'ERROR': return getTranslation('tryAgain', language);
+      default: return '';
+    }
+  };
+
+  const getVoiceFeedbackPhase = () => {
+    if (voiceError) return 'error';
+    if (useBackendVoice && orbState !== 'IDLE' && orbState !== 'RECORDING') {
+      if (orbState === 'TRANSCRIBING') return 'transcribing';
+      if (orbState === 'THINKING') return 'thinking';
+      if (orbState === 'SUCCESS') return 'answerReady';
+      if (orbState === 'ERROR') return 'error';
+    }
+    if (showAnswerReady) return 'answerReady';
+    if (isProcessing) return 'processing';
+    if (isListening) return 'recording';
+    return 'idle';
   };
 
   const handleQuerySubmit = async (query) => {
@@ -209,13 +241,23 @@ const HomeScreen = ({ onNavigate }) => {
     if (advisoryLoading) return;
     const canFetch =
       appState.isOnline &&
-      (action.id === 'soil' || action.id === 'crop' || action.id === 'crops' || action.id === 'market');
+      (action.id === 'soil' || action.id === 'crop' || action.id === 'crops' || action.id === 'market' || action.id === 'govt-scheme');
     let showPanel = false;
     if (canFetch) {
       setAdvisoryLoading(true);
       setAdvisoryError(null);
+      if (action.id === 'govt-scheme') {
+        setAdvisoryPanel({ type: 'govt-schemes', data: {} });
+      }
       try {
-        const chatResponse = await sendMessage(action.query);
+        const chatResponse =
+          action.id === 'govt-scheme'
+            ? await apiClient.sendChatMessage(
+                action.query,
+                chatState.sessionId,
+                appState.farmerId || undefined
+              )
+            : await sendMessage(action.query);
         const responseText = typeof chatResponse?.response === 'string' ? chatResponse.response : '';
         if (action.id === 'soil') {
           setAdvisoryPanel({
@@ -234,6 +276,14 @@ const HomeScreen = ({ onNavigate }) => {
             type: 'market',
             data: { responseText, prices: [] },
           });
+          showPanel = true;
+        } else if (action.id === 'govt-scheme') {
+          if (isUnhelpfulSchemesResponse(responseText)) {
+            setAdvisoryError('Agent could not help');
+            setAdvisoryPanel({ type: 'govt-schemes', data: {} });
+          } else {
+            setAdvisoryPanel({ type: 'govt-schemes', data: { responseText } });
+          }
           showPanel = true;
         }
       } catch (err) {
@@ -268,6 +318,11 @@ const HomeScreen = ({ onNavigate }) => {
       id: 'market',
       label: language === 'hi' ? 'बाज़ार भाव' : 'market prices',
       query: language === 'hi' ? 'बाजार के भाव दिखाएं' : 'Show market prices',
+    },
+    {
+      id: 'govt-scheme',
+      label: language === 'hi' ? 'सरकारी योजना' : 'govt scheme',
+      query: language === 'hi' ? 'मेरे लिए कौन सी सरकारी योजनाएं हैं?' : 'What government schemes am I eligible for?',
     },
   ];
 
@@ -726,21 +781,15 @@ const HomeScreen = ({ onNavigate }) => {
           isListening={isListening}
           isProcessing={isProcessing}
           isError={!!voiceError}
+          orbState={useBackendVoice ? orbState : undefined}
+          statusLabel={useBackendVoice ? getOrbStatusLabel() : undefined}
+          transcriptPreview={useBackendVoice && (orbState === 'TRANSCRIBING' || orbState === 'THINKING') ? transcript : undefined}
+          onCancel={useBackendVoice ? cancelVoicePipeline : undefined}
           onPress={handleVoiceOrbClick}
           label={getTranslation('tapToSpeak', language)}
         />
         <VoiceFeedback
-          phase={
-            voiceError
-              ? 'error'
-              : showAnswerReady
-                ? 'answerReady'
-                : isProcessing
-                  ? 'processing'
-                  : isListening
-                    ? 'recording'
-                    : 'idle'
-          }
+          phase={getVoiceFeedbackPhase()}
           frequencyData={frequencyData}
           recordingStartedAt={recordingStartedAt}
           language={language}
@@ -777,7 +826,9 @@ const HomeScreen = ({ onNavigate }) => {
                   ? (language === 'hi' ? 'फसल सलाह' : 'Crop advice')
                   : advisoryPanel?.type === 'market'
                     ? (language === 'hi' ? 'बाज़ार भाव' : 'Market prices')
-                    : (language === 'hi' ? 'जानकारी' : 'Advisory')}
+                    : advisoryPanel?.type === 'govt-schemes'
+                      ? (language === 'hi' ? 'सरकारी योजनाएं' : 'Govt Schemes')
+                      : (language === 'hi' ? 'जानकारी' : 'Advisory')}
             </span>
             <button
               type="button"
@@ -800,42 +851,53 @@ const HomeScreen = ({ onNavigate }) => {
         }
       >
         <div style={{ padding: spacing['4'] }}>
-          {advisoryLoading && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ height: 16, borderRadius: 4, background: 'rgba(0,0,0,0.08)', width: '60%', animation: 'advisorySkeletonPulse 1.2s ease-in-out infinite' }} />
-              <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '90%' }} />
-              <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '75%' }} />
-              <div style={{ height: 40, borderRadius: 8, background: 'rgba(0,0,0,0.06)', width: '100%' }} />
-              <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '50%' }} />
-            </div>
-          )}
-          {advisoryError && !advisoryLoading && (
-            <p style={{ fontFamily: typography.fonts.sans, color: colors.status?.error || '#dc2626' }}>
-              {advisoryError}
-            </p>
-          )}
-          {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'soil' && (
-            <SoilMoistureDisplay
-              moistureLevel={advisoryPanel.data.moistureLevel}
-              timestamp={advisoryPanel.data.timestamp}
-              trend={advisoryPanel.data.trend}
-              responseText={advisoryPanel.data.responseText}
+          {advisoryPanel?.type === 'govt-schemes' ? (
+            <GovtSchemesSheetContent
+              loading={advisoryLoading}
+              error={!!advisoryError}
+              responseText={advisoryPanel?.data?.responseText}
               language={language}
             />
-          )}
-          {advisoryPanel && !advisoryLoading && (advisoryPanel.type === 'crop' || advisoryPanel.type === 'crops') && (
-            <CropRecommendationList
-              responseText={advisoryPanel.data.responseText}
-              recommendations={advisoryPanel.data.recommendations}
-              language={language}
-            />
-          )}
-          {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'market' && (
-            <MarketPriceTable
-              prices={advisoryPanel.data.prices}
-              responseText={advisoryPanel.data.responseText}
-              language={language}
-            />
+          ) : (
+            <>
+              {advisoryLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ height: 16, borderRadius: 4, background: 'rgba(0,0,0,0.08)', width: '60%', animation: 'advisorySkeletonPulse 1.2s ease-in-out infinite' }} />
+                  <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '90%' }} />
+                  <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '75%' }} />
+                  <div style={{ height: 40, borderRadius: 8, background: 'rgba(0,0,0,0.06)', width: '100%' }} />
+                  <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '50%' }} />
+                </div>
+              )}
+              {advisoryError && !advisoryLoading && (
+                <p style={{ fontFamily: typography.fonts.sans, color: colors.status?.error || '#dc2626' }}>
+                  {advisoryError}
+                </p>
+              )}
+              {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'soil' && (
+                <SoilMoistureDisplay
+                  moistureLevel={advisoryPanel.data.moistureLevel}
+                  timestamp={advisoryPanel.data.timestamp}
+                  trend={advisoryPanel.data.trend}
+                  responseText={advisoryPanel.data.responseText}
+                  language={language}
+                />
+              )}
+              {advisoryPanel && !advisoryLoading && (advisoryPanel.type === 'crop' || advisoryPanel.type === 'crops') && (
+                <CropRecommendationList
+                  responseText={advisoryPanel.data.responseText}
+                  recommendations={advisoryPanel.data.recommendations}
+                  language={language}
+                />
+              )}
+              {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'market' && (
+                <MarketPriceTable
+                  prices={advisoryPanel.data.prices}
+                  responseText={advisoryPanel.data.responseText}
+                  language={language}
+                />
+              )}
+            </>
           )}
         </div>
       </BottomSheet>
