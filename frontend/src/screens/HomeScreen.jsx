@@ -12,7 +12,9 @@ import { VOICE_LANGUAGE_CONFIG } from '../utils/constants';
 import SoilMoistureDisplay from '../components/SoilMoistureDisplay';
 import CropRecommendationList from '../components/CropRecommendationList';
 import MarketPriceTable from '../components/MarketPriceTable';
+import VoiceFeedback from '../components/VoiceFeedback';
 import LangSheet from './components/LangSheet';
+import { playVoiceBeep } from '../utils/voiceSounds';
 
 /**
  * HomeScreen - Voice-first home interface
@@ -27,6 +29,7 @@ const HomeScreen = ({ onNavigate }) => {
   const { sendMessage } = useChatContext();
   const { language } = useLanguage();
   const [queryHistory, setQueryHistory] = useState([]); // { text, timestamp }[]
+  const [farmerName, setFarmerName] = useState(null); // from backend for greeting
 
   const formatHistoryDate = (ts) => {
     const d = new Date(ts);
@@ -41,7 +44,17 @@ const HomeScreen = ({ onNavigate }) => {
     const dateStr = d.toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
     return `${dateStr}, ${timeStr}`;
   };
-  const { isListening, transcript, error: voiceError, startListening, stopListening, isSupported } = useVoiceInput(language, {
+  const {
+    isListening,
+    isProcessing,
+    transcript,
+    error: voiceError,
+    recordingStartedAt,
+    frequencyData,
+    startListening,
+    stopListening,
+    isSupported,
+  } = useVoiceInput(language, {
     useBackend: appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
   });
 
@@ -51,6 +64,7 @@ const HomeScreen = ({ onNavigate }) => {
   const [advisoryPanel, setAdvisoryPanel] = useState(null);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [advisoryError, setAdvisoryError] = useState(null);
+  const [showAnswerReady, setShowAnswerReady] = useState(false);
 
   const prompts = language === 'hi'
     ? [
@@ -63,7 +77,18 @@ const HomeScreen = ({ onNavigate }) => {
         'What are the market prices today?',
         'What to do when groundwater levels are low?',
       ];
-  const diveBackLabel = language === 'hi' ? 'वापस आइए।' : 'dive back in.';
+
+  /** Time-aware greeting with optional farmer name (e.g. "Good morning, राम प्रसाद".) */
+  const getGreetingLabel = () => {
+    const hour = new Date().getHours();
+    let key = 'greetingMorning';
+    if (hour >= 12 && hour < 17) key = 'greetingAfternoon';
+    else if (hour >= 17) key = 'greetingEvening';
+    const timeGreeting = getTranslation(key, language);
+    const name = (farmerName || '').trim();
+    if (name) return `${timeGreeting}, ${name}.`;
+    return getTranslation('diveBackIn', language);
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -76,17 +101,43 @@ const HomeScreen = ({ onNavigate }) => {
     setQueryHistory(getQueryHistory?.() ?? []);
   }, [getQueryHistory]);
 
+  /** Fetch farmer name for personalized greeting when farmerId is set. */
+  useEffect(() => {
+    const id = (appState.farmerId || '').trim();
+    if (!id) {
+      setFarmerName(null);
+      return;
+    }
+    let cancelled = false;
+    apiClient.getFarmer(id).then((farmer) => {
+      if (!cancelled && farmer?.farmer_name) setFarmerName(farmer.farmer_name);
+      else if (!cancelled) setFarmerName(null);
+    }).catch(() => { if (!cancelled) setFarmerName(null); });
+    return () => { cancelled = true; };
+  }, [appState.farmerId]);
+
   const handleClearPastConversations = () => {
     clearQueryHistory?.();
     setQueryHistory([]);
     setShowClearHistoryConfirm(false);
   };
 
+  // Answer ready: when transcript arrives, show "Answer ready", beep, vibrate, then submit and navigate after 1.5s
   useEffect(() => {
-    if (transcript && transcript.trim() !== '') {
-      handleQuerySubmit(transcript);
+    if (!transcript || transcript.trim() === '') return;
+    setShowAnswerReady(true);
+    playVoiceBeep('complete');
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(100);
+      } catch (_) {}
     }
-  }, [transcript]); // eslint-disable-line react-hooks/exhaustive-deps -- handleQuerySubmit is stable
+    const t = setTimeout(() => {
+      handleQuerySubmit(transcript);
+      setShowAnswerReady(false);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [transcript]); // eslint-disable-line react-hooks/exhaustive-deps -- handleQuerySubmit, onNavigate stable
 
   const handleVoiceOrbClick = () => {
     if (!appState.voiceEnabled || !isSupported) return;
@@ -321,7 +372,7 @@ const HomeScreen = ({ onNavigate }) => {
                 marginBottom: '10px',
               }}
             >
-              {diveBackLabel}
+              {getGreetingLabel()}
             </p>
             {/* Arrow button to the left of the question, same row */}
             <div
@@ -525,44 +576,32 @@ const HomeScreen = ({ onNavigate }) => {
               justifyContent: 'center',
             }}
           >
-            <VoiceOrb size={72} isListening={isListening} onPress={handleVoiceOrbClick} />
+            <VoiceOrb
+              size={72}
+              isListening={isListening}
+              isProcessing={isProcessing}
+              isError={!!voiceError}
+              onPress={handleVoiceOrbClick}
+              label={getTranslation('tapToSpeak', language)}
+            />
           </div>
 
-          {isListening && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-              <div
-                style={{
-                  fontFamily: typography.fonts.sans,
-                  fontSize: typography.size.md,
-                  color: colors.text.secondary,
-                  animation: `fadePulse ${animation.duration.slow} ease-in-out infinite`,
-                }}
-              >
-                {getTranslation('listening', language)}
-              </div>
-              <div
-                style={{
-                  fontFamily: typography.fonts.sans,
-                  fontSize: typography.size.sm,
-                  color: colors.text.tertiary || 'rgba(0,0,0,0.45)',
-                }}
-              >
-                {getTranslation('tapToStopAndSend', language)}
-              </div>
-            </div>
-          )}
-          {voiceError && !isListening && (
-            <div
-              style={{
-                marginTop: spacing['2'],
-                fontFamily: typography.fonts.sans,
-                fontSize: typography.size.sm,
-                color: colors.status?.error || '#dc2626',
-              }}
-            >
-              {getTranslation('voiceError', language)}
-            </div>
-          )}
+          <VoiceFeedback
+            phase={
+              voiceError
+                ? 'error'
+                : showAnswerReady
+                  ? 'answerReady'
+                  : isProcessing
+                    ? 'processing'
+                    : isListening
+                      ? 'recording'
+                      : 'idle'
+            }
+            frequencyData={frequencyData}
+            recordingStartedAt={recordingStartedAt}
+            language={language}
+          />
         </div>
       </div>
 

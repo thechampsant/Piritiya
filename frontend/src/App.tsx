@@ -120,10 +120,15 @@ function App() {
         @keyframes blob1 { 0%,100% { transform:translate(0,0) } 50% { transform:translate(15px,-20px) } }
         @keyframes blob2 { 0%,100% { transform:translate(0,0) } 50% { transform:translate(-20px,15px) } }
         @keyframes blob3 { 0%,100% { transform:translate(0,0) } 50% { transform:translate(-12px,22px) } }
-        @keyframes orbIdle { 0%,100% { transform:scale(1) } 50% { transform:scale(1.04) } }
+        @keyframes orbIdle { 0%,100% { transform:scale(1) } 50% { transform:scale(1.08) } }
         @keyframes orbBreath { 0%,100% { transform:scale(1) } 50% { transform:scale(1.08) } }
-        @keyframes orbIdleRing { 0%,100% { transform:scale(1); opacity:0.5 } 50% { transform:scale(1.08); opacity:0.15 } }
+        @keyframes orbActive { 0%,100% { transform:scale(1) } 50% { transform:scale(1.15) } }
+        @keyframes orbIdleRing { 0%,100% { transform:scale(1); opacity:0.4 } 50% { transform:scale(1.08); opacity:0.15 } }
+        @keyframes orbIdleLabel { 0%,100% { opacity:0.55 } 50% { opacity:1 } }
         @keyframes orbRipple { 0% { transform:scale(0.85); opacity:0.6 } 100% { transform:scale(1.7); opacity:0 } }
+        @keyframes orbRippleGreen { 0% { transform:scale(1); opacity:0.6 } 100% { transform:scale(2); opacity:0 } }
+        @keyframes orbSpin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+        @keyframes orbErrorPulse { 0%,100% { transform:scale(1); opacity:1 } 50% { transform:scale(1.06); opacity:0.92 } }
         @keyframes slideUp { from { transform:translateY(100%); opacity:0 } to { transform:translateY(0); opacity:1 } }
         @keyframes beetleWiggle { 0%,100% { transform:rotate(-8deg) } 25% { transform:rotate(8deg) } 50% { transform:rotate(-5deg) } 75% { transform:rotate(5deg) } }
         input::placeholder { color: rgba(0,0,0,0.3); }

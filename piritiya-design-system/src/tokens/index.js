@@ -66,8 +66,10 @@ export const colors = {
   orb: {
     idle:     "linear-gradient(180deg, rgba(255,153,51,0.75) 0%, rgba(255,255,255,0.85) 48%, rgba(19,136,8,0.7) 100%)",
     active:   "linear-gradient(180deg, rgba(255,153,51,0.95) 0%, rgba(255,255,255,0.95) 48%, rgba(19,136,8,0.9) 100%)",
+    error:    "linear-gradient(180deg, rgba(220,38,38,0.9) 0%, rgba(185,28,28,0.95) 100%)",
     shadowIdle:   "0 0 0 1px rgba(255,153,51,0.2), 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.5)",
     shadowActive: "0 0 0 2px rgba(255,153,51,0.4), 0 8px 40px rgba(255,153,51,0.3), 0 8px 40px rgba(19,136,8,0.2), inset 0 1px 0 rgba(255,255,255,0.6)",
+    shadowError:  "0 0 0 2px rgba(220,38,38,0.5), 0 6px 32px rgba(220,38,38,0.35), inset 0 1px 0 rgba(255,255,255,0.3)",
   },
 };
 
@@ -189,10 +191,15 @@ export const animation = {
     @keyframes blob1     { 0%,100% { transform:translate(0,0) }     50% { transform:translate(15px,-20px) } }
     @keyframes blob2     { 0%,100% { transform:translate(0,0) }     50% { transform:translate(-20px,15px) } }
     @keyframes blob3     { 0%,100% { transform:translate(0,0) }     50% { transform:translate(-12px,22px) } }
-    @keyframes orbIdle   { 0%,100% { transform:scale(1) }           50% { transform:scale(1.04) } }
+    @keyframes orbIdle   { 0%,100% { transform:scale(1) }           50% { transform:scale(1.08) } }
     @keyframes orbBreath { 0%,100% { transform:scale(1) }           50% { transform:scale(1.08) } }
-    @keyframes orbIdleRing { 0%,100% { transform:scale(1); opacity:0.5 } 50% { transform:scale(1.08); opacity:0.15 } }
+    @keyframes orbActive { 0%,100% { transform:scale(1) }           50% { transform:scale(1.15) } }
+    @keyframes orbIdleRing { 0%,100% { transform:scale(1); opacity:0.4 } 50% { transform:scale(1.08); opacity:0.15 } }
+    @keyframes orbIdleLabel { 0%,100% { opacity:0.55 } 50% { opacity:1 } }
     @keyframes orbRipple { 0% { transform:scale(0.85); opacity:0.6 } 100% { transform:scale(1.7); opacity:0 } }
+    @keyframes orbRippleGreen { 0% { transform:scale(1); opacity:0.6 } 100% { transform:scale(2); opacity:0 } }
+    @keyframes orbSpin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+    @keyframes orbErrorPulse { 0%,100% { transform:scale(1); opacity:1 } 50% { transform:scale(1.06); opacity:0.92 } }
     @keyframes slideUp   { from { transform:translateY(100%); opacity:0 } to { transform:translateY(0); opacity:1 } }
     @keyframes beetleWiggle { 0%,100% { transform:rotate(-8deg) } 25% { transform:rotate(8deg) } 50% { transform:rotate(-5deg) } 75% { transform:rotate(5deg) } }
   `,
@@ -268,10 +275,22 @@ export const globalStyles = `
   }
 
   .animate-orbIdle {
-    animation: orbIdle 4s ${animation.easing.default} infinite;
+    animation: orbIdle 2s ${animation.easing.default} infinite;
   }
 
   .animate-orbBreath {
     animation: orbBreath 2s ${animation.easing.default} infinite;
+  }
+
+  .animate-orbActive {
+    animation: orbActive 0.8s ${animation.easing.default} infinite;
+  }
+
+  .animate-orbIdleLabel {
+    animation: orbIdleLabel 2s ${animation.easing.default} infinite;
+  }
+
+  .animate-orbSpin {
+    animation: orbSpin 1.35s linear infinite;
   }
 `;

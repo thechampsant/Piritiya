@@ -21,6 +21,22 @@ const translations = {
     en: 'Welcome to Piritiya',
     hi: 'पिरितिया में आपका स्वागत है',
   },
+  greetingMorning: {
+    en: 'Good morning',
+    hi: 'सुप्रभात',
+  },
+  greetingAfternoon: {
+    en: 'Good afternoon',
+    hi: 'शुभ दोपहर',
+  },
+  greetingEvening: {
+    en: 'Good evening',
+    hi: 'शुभ संध्या',
+  },
+  diveBackIn: {
+    en: 'Dive back in.',
+    hi: 'वापस आइए।',
+  },
   getStarted: {
     en: 'Get Started',
     hi: 'शुरू करें',
@@ -67,6 +83,10 @@ const translations = {
     en: 'Tap again to stop and send',
     hi: 'भेजने के लिए फिर टैप करें',
   },
+  tapToSpeak: {
+    en: 'Tap to speak',
+    hi: 'बोलें',
+  },
   voiceError: {
     en: 'Voice failed. Try again or type.',
     hi: 'आवाज़ काम नहीं आई। पुनः प्रयास करें या टाइप करें।',
@@ -74,6 +94,22 @@ const translations = {
   speaking: {
     en: 'Speaking...',
     hi: 'बोल रहा हूँ...',
+  },
+  keepSpeaking: {
+    en: 'Keep speaking...',
+    hi: 'बोलते रहें...',
+  },
+  processing: {
+    en: 'Processing...',
+    hi: 'समझ रहा हूँ...',
+  },
+  answerReady: {
+    en: 'Answer ready',
+    hi: 'जवाब तैयार है',
+  },
+  tryAgain: {
+    en: 'Try again',
+    hi: 'फिर से कोशिश करें',
   },
   offline_mode: {
     en: 'Offline Mode',

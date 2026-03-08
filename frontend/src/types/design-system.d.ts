@@ -12,8 +12,11 @@ declare module '@ds/components' {
   // Voice Orb
   export const VoiceOrb: React.FC<{
     isListening?: boolean;
+    isProcessing?: boolean;
+    isError?: boolean;
     onPress?: () => void;
     size?: number;
+    label?: string;
   }>;
 
   // Toggle Switch

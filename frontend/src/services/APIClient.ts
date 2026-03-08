@@ -114,6 +114,19 @@ export class APIClient {
   }
 
   /**
+   * Get a single farmer's details (e.g. for personalized greeting)
+   */
+  async getFarmer(farmerId: string): Promise<{ farmer_id: string; farmer_name?: string } | null> {
+    if (!farmerId?.trim()) return null;
+    const url = `${this.baseURL}${API_ENDPOINTS.FARMERS}/${encodeURIComponent(farmerId.trim())}`;
+    try {
+      return await this.fetchWithRetry(url);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Get soil moisture data for a farmer
    */
   async getSoilMoisture(farmerId?: string): Promise<SoilMoistureData> {

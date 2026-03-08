@@ -11,7 +11,9 @@ import { VOICE_LANGUAGE_CONFIG } from '../utils/constants';
 import SoilMoistureDisplay from '../components/SoilMoistureDisplay';
 import CropRecommendationList from '../components/CropRecommendationList';
 import MarketPriceTable from '../components/MarketPriceTable';
+import VoiceFeedback from '../components/VoiceFeedback';
 import LangSheet from './components/LangSheet';
+import { playVoiceBeep } from '../utils/voiceSounds';
 
 /**
  * ChatScreen - Conversation view with message bubbles
@@ -34,11 +36,23 @@ const ChatScreen = ({ onNavigate }) => {
   const { state: chatState, sendMessage, startNewSession, openSession } = useChatContext();
   const { language, formatTime } = useLanguage();
   const { state: appState, setLanguage } = useApp();
-  const { isListening, transcript, startListening, stopListening, isSupported } = useVoiceInput(language, {
+  const {
+    isListening,
+    isProcessing,
+    transcript,
+    error: voiceError,
+    recordingStartedAt,
+    frequencyData,
+    startListening,
+    stopListening,
+    isSupported,
+  } = useVoiceInput(language, {
     useBackend: appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false),
   });
 
   const [showLangSheet, setShowLangSheet] = useState(false);
+  const [showAnswerReady, setShowAnswerReady] = useState(false);
+  const prevLoadingRef = useRef(false);
   const messagesEndRef = useRef(null);
 
   const { messages, isLoading } = chatState;
@@ -65,6 +79,23 @@ const ChatScreen = ({ onNavigate }) => {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages.length]);
+
+  // Answer ready: when bot reply arrives (isLoading true -> false), show "Answer ready", beep, vibrate
+  useEffect(() => {
+    const wasLoading = prevLoadingRef.current;
+    prevLoadingRef.current = isLoading;
+    if (wasLoading && !isLoading) {
+      setShowAnswerReady(true);
+      playVoiceBeep('complete');
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate(100);
+        } catch (_) {}
+      }
+      const t = setTimeout(() => setShowAnswerReady(false), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [isLoading]);
 
   useEffect(() => {
     if (transcript && transcript.trim() !== '') {
@@ -442,19 +473,27 @@ const ChatScreen = ({ onNavigate }) => {
         <VoiceOrb
           size={72}
           isListening={isListening}
+          isProcessing={isProcessing || isLoading}
+          isError={!!voiceError}
           onPress={handleVoiceOrbClick}
+          label={t('tapToSpeak')}
         />
-        <span
-          style={{
-            fontFamily: typography.fonts.sans,
-            fontSize: typography.size.sm,
-            color: colors.text.tertiary || 'rgba(0,0,0,0.5)',
-          }}
-        >
-          {isListening
-            ? (language === 'hi' ? 'बोलें, फिर टैप करके भेजें' : 'Speak, then tap to send')
-            : (language === 'hi' ? 'बोलने के लिए टैप करें' : 'Tap to speak')}
-        </span>
+        <VoiceFeedback
+          phase={
+            voiceError
+              ? 'error'
+              : showAnswerReady
+                ? 'answerReady'
+                : isProcessing
+                  ? 'processing'
+                  : isListening
+                    ? 'recording'
+                    : 'idle'
+          }
+          frequencyData={frequencyData}
+          recordingStartedAt={recordingStartedAt}
+          language={language}
+        />
       </div>
 
       <LangSheet

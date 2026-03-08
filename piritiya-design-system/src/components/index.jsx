@@ -28,70 +28,140 @@ export const AmbientBg = () => (
 );
 
 // ─── VOICE ORB ────────────────────────────────────────────────────────────────
-// The central voice input button. Renders the tricolour orb with ripple rings
-// when listening and idle pulse when not.
+// The central voice input button. Three states: idle (soft pulse + green glow),
+// recording (faster pulse + green ripples), processing (spinning green border).
 //
 // Props:
-//   isListening  boolean  — active recording state
-//   onPress      function — tap handler
-//   size         number   — orb diameter in px (default: 72)
-export const VoiceOrb = ({ isListening = false, onPress, size = 72 }) => (
-  <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-    {/* Ripple rings — listening state */}
-    {isListening && [1, 2, 3].map(i => (
-      <div key={i} style={{
-        position: "absolute",
-        width: `${size + i * 28}px`, height: `${size + i * 28}px`,
-        borderRadius: "50%",
-        border: "1px solid rgba(255,153,51,0.25)",
-        animation: `orbRipple 2s ease-out ${i * 0.5}s infinite`,
-        pointerEvents: "none",
-      }} />
-    ))}
-    {/* Idle ring */}
-    {!isListening && (
-      <div style={{
-        position: "absolute",
-        width: `${size + 24}px`, height: `${size + 24}px`,
-        borderRadius: "50%",
-        border: "1px solid rgba(255,153,51,0.15)",
-        animation: "orbIdleRing 3s ease-in-out infinite",
-        pointerEvents: "none",
-      }} />
-    )}
-    {/* Orb button */}
-    <button
-      onClick={onPress}
-      style={{
-        width: `${size}px`, height: `${size}px`,
-        borderRadius: "50%", border: "none",
-        cursor: "pointer", position: "relative", overflow: "hidden",
-        background: isListening ? colors.orb.active : colors.orb.idle,
-        boxShadow: isListening ? colors.orb.shadowActive : colors.orb.shadowIdle,
-        animation: isListening ? "orbBreath 1.6s ease-in-out infinite" : "orbIdle 4s ease-in-out infinite",
-        transition: "box-shadow 0.4s ease, background 0.4s ease",
-      }}
-    >
-      {/* Inner highlight shimmer */}
-      <div style={{
-        position: "absolute", top: "12px", left: "16px",
-        width: "22px", height: "12px", borderRadius: "50%",
-        background: "rgba(255,255,255,0.35)",
-        filter: "blur(4px)",
-        transform: "rotate(-20deg)",
-      }} />
-      {/* Mic icon — Ashoka Chakra navy, fades on listen */}
-      <div style={{
-        position: "absolute", inset: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        opacity: isListening ? 0 : 0.8,
-        transition: "opacity 0.3s ease",
-      }}>
-        <Mic size={Math.round(size * 0.36)} color="#000080" />
+//   isListening   boolean  — active recording state
+//   isProcessing  boolean  — loading after recording (spinning border, no pulse)
+//   onPress       function — tap handler
+//   size          number   — orb diameter in px (default: 72)
+//   label         string   — optional "Tap to speak" / "बोलें" below orb (idle only, fades with pulse)
+//   isError      boolean  — error state: red pulsing orb
+const GREEN_RING = "rgba(19,136,8,0.5)";
+const GREEN_GLOW = "rgba(19,136,8,0.25)";
+
+export const VoiceOrb = ({ isListening = false, isProcessing = false, isError = false, onPress, size = 72, label }) => {
+  const isIdle = !isError && !isProcessing && !isListening;
+  const isRecording = !isError && !isProcessing && isListening;
+
+  return (
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {/* Green ripple rings — recording: same size as button, expand outward */}
+        {isRecording && [0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              width: `${size}px`,
+              height: `${size}px`,
+              borderRadius: "50%",
+              border: `2px solid ${GREEN_RING}`,
+              animation: `orbRippleGreen 0.8s ease-out ${i * 0.27}s infinite`,
+              pointerEvents: "none",
+            }}
+          />
+        ))}
+        {/* Idle ring — green glow, pulses with idle */}
+        {isIdle && (
+          <div
+            style={{
+              position: "absolute",
+              width: `${size + 24}px`,
+              height: `${size + 24}px`,
+              borderRadius: "50%",
+              border: `1px solid ${GREEN_GLOW}`,
+              animation: "orbIdleRing 2s ease-in-out infinite",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {/* Spinning border — processing (hide when error) */}
+        {!isError && isProcessing && (
+          <div
+            style={{
+              position: "absolute",
+              width: `${size + 8}px`,
+              height: `${size + 8}px`,
+              borderRadius: "50%",
+              border: "2px solid transparent",
+              borderTopColor: "#138808",
+              borderRightColor: "rgba(19,136,8,0.3)",
+              animation: "orbSpin 1.35s linear infinite",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {/* Orb button */}
+        <button
+          onClick={onPress}
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            borderRadius: "50%",
+            border: "none",
+            cursor: "pointer",
+            position: "relative",
+            overflow: "hidden",
+            background: isError ? colors.orb.error : (isRecording ? colors.orb.active : colors.orb.idle),
+            boxShadow: isError ? colors.orb.shadowError : (isRecording ? colors.orb.shadowActive : colors.orb.shadowIdle),
+            animation: isError
+              ? "orbErrorPulse 1.2s ease-in-out infinite"
+              : isProcessing
+                ? "none"
+                : isRecording
+                  ? "orbActive 0.8s ease-in-out infinite"
+                  : "orbIdle 2s ease-in-out infinite",
+            transition: "box-shadow 0.4s ease, background 0.4s ease",
+          }}
+        >
+          {/* Inner highlight shimmer */}
+          <div
+            style={{
+              position: "absolute",
+              top: "12px",
+              left: "16px",
+              width: "22px",
+              height: "12px",
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.35)",
+              filter: "blur(4px)",
+              transform: "rotate(-20deg)",
+            }}
+          />
+          {/* Mic icon — Ashoka Chakra navy, fades on listen */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: isRecording ? 0 : 0.8,
+              transition: "opacity 0.3s ease",
+            }}
+          >
+            <Mic size={Math.round(size * 0.36)} color="#000080" />
+          </div>
+        </button>
       </div>
-    </button>
-  </div>
-);
+      {/* Label — "Tap to speak" / "बोलें", fades in/out with idle pulse; only when idle */}
+      {label && isIdle && (
+        <span
+          style={{
+            fontFamily: typography.fonts.sans,
+            fontSize: typography.size.sm,
+            color: colors.text.tertiary || "rgba(20,30,16,0.5)",
+            animation: "orbIdleLabel 2s ease-in-out infinite",
+          }}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+};
 
 // ─── TOGGLE SWITCH ────────────────────────────────────────────────────────────
 // iOS-style toggle for boolean settings.

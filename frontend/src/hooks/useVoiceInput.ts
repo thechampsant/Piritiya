@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Language } from '../types';
 import { apiClient } from '../services/APIClient';
+import { playVoiceBeep } from '../utils/voiceSounds';
+
+const FREQUENCY_BARS = 12;
+const FFT_SIZE = 256;
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -37,10 +41,23 @@ declare global {
   }
 }
 
+function vibrate(pattern: number | number[]): void {
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 interface UseVoiceInputReturn {
   isListening: boolean;
+  isProcessing: boolean;
   transcript: string;
   error: Error | null;
+  recordingStartedAt: number | null;
+  frequencyData: number[];
   startListening: () => void;
   stopListening: () => void;
   isSupported: boolean;
@@ -65,13 +82,19 @@ export function useVoiceInput(
 ): UseVoiceInputReturn {
   const { useBackend = false } = options;
   const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<Error | null>(null);
   const [isSupported, setIsSupported] = useState(false);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
+  const [frequencyData, setFrequencyData] = useState<number[]>([]);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const rafIdRef = useRef<number | null>(null);
 
   // Check browser compatibility on mount
   useEffect(() => {
@@ -151,19 +174,61 @@ export function useVoiceInput(
 
       setError(new Error(errorMessage));
       setIsListening(false);
+      setRecordingStartedAt(null);
+      vibrate([100, 50, 100, 50, 100]);
     };
 
     // Handle recognition end
     recognition.onend = () => {
       setIsListening(false);
+      setRecordingStartedAt(null);
     };
 
     // Handle recognition start
     recognition.onstart = () => {
       setIsListening(true);
       setError(null);
+      setRecordingStartedAt(Date.now());
+      vibrate(50);
+      playVoiceBeep('start');
     };
   }, [language, useBackend]);
+
+  // Waveform: rAF loop when recording (backend path with analyser)
+  useEffect(() => {
+    if (!isListening || !useBackend || !analyserRef.current) return;
+    const analyser = analyserRef.current;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    const tick = () => {
+      if (!analyserRef.current) return;
+      analyser.getByteFrequencyData(dataArray);
+      const step = Math.floor(dataArray.length / FREQUENCY_BARS);
+      const bars: number[] = [];
+      for (let i = 0; i < FREQUENCY_BARS; i++) {
+        let sum = 0;
+        for (let j = 0; j < step; j++) sum += dataArray[i * step + j] ?? 0;
+        bars.push(Math.min(255, Math.round(sum / step)));
+      }
+      setFrequencyData(bars);
+      rafIdRef.current = requestAnimationFrame(tick);
+    };
+    rafIdRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafIdRef.current != null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      setFrequencyData([]);
+    };
+  }, [isListening, useBackend]);
+
+  // Error auto-reset after 3s
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 3000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   // Start listening function
   const startListening = useCallback(async () => {
@@ -183,6 +248,16 @@ export function useVoiceInput(
         setIsListening(true);
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         chunksRef.current = [];
+
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = FFT_SIZE;
+        analyser.smoothingTimeConstant = 0.8;
+        const source = ctx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        audioContextRef.current = ctx;
+        analyserRef.current = analyser;
+
         const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
         const recorder = new MediaRecorder(stream);
         mediaRecorderRef.current = recorder;
@@ -195,7 +270,23 @@ export function useVoiceInput(
           stream.getTracks().forEach((t) => t.stop());
           mediaRecorderRef.current = null;
           setIsListening(false);
-          if (chunksRef.current.length === 0) return;
+          setIsProcessing(true);
+          setRecordingStartedAt(null);
+          setFrequencyData([]);
+          if (audioContextRef.current) {
+            try {
+              await audioContextRef.current.close();
+            } catch {
+              // ignore
+            }
+            audioContextRef.current = null;
+          }
+          analyserRef.current = null;
+          vibrate([50, 50, 50]);
+          if (chunksRef.current.length === 0) {
+            setIsProcessing(false);
+            return;
+          }
           const blob = new Blob(chunksRef.current, { type: mime });
           const languageCode = language === 'hi' ? 'hi-IN' : 'en-IN';
           try {
@@ -205,18 +296,28 @@ export function useVoiceInput(
           } catch (err) {
             setError(err instanceof Error ? err : new Error('Transcription failed'));
             setTranscript('');
+            vibrate([100, 50, 100, 50, 100]);
+          } finally {
+            setIsProcessing(false);
           }
         };
 
         recorder.onerror = () => {
           setError(new Error('Recording failed'));
           setIsListening(false);
+          setRecordingStartedAt(null);
+          vibrate([100, 50, 100, 50, 100]);
         };
 
         recorder.start(100);
+        setRecordingStartedAt(Date.now());
+        vibrate(50);
+        playVoiceBeep('start');
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to start recording'));
         setIsListening(false);
+        setRecordingStartedAt(null);
+        vibrate([100, 50, 100, 50, 100]);
       }
       return;
     }
@@ -231,6 +332,7 @@ export function useVoiceInput(
       const error = err instanceof Error ? err : new Error('Failed to start speech recognition');
       setError(error);
       setIsListening(false);
+      vibrate([100, 50, 100, 50, 100]);
     }
   }, [isSupported, isListening, useBackend, language]);
 
@@ -275,8 +377,11 @@ export function useVoiceInput(
 
   return {
     isListening,
+    isProcessing,
     transcript,
     error,
+    recordingStartedAt,
+    frequencyData,
     startListening,
     stopListening,
     isSupported,
