@@ -7,6 +7,12 @@ interface UseVoiceOutputReturn {
   speak: (text: string) => void;
   stop: () => void;
   isSupported: boolean;
+  /** Re-play the last Polly audio from cached blob URL. No-op if nothing to replay. */
+  replay: () => void;
+  /** True after a successful Polly play until clearReplay() or next speak(). */
+  canReplay: boolean;
+  /** Revoke cached blob URL and hide replay button (e.g. when user starts new recording). */
+  clearReplay: () => void;
 }
 
 export interface UseVoiceOutputOptions {
@@ -29,6 +35,7 @@ export function useVoiceOutput(
   const { useBackend = false } = options;
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
+  const [canReplay, setCanReplay] = useState(false);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const voicesLoadedRef = useRef(false);
@@ -82,6 +89,14 @@ export function useVoiceOutput(
     return voice || null;
   }, []);
 
+  const clearReplay = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setCanReplay(false);
+  }, []);
+
   // Stop function (declared before speak so speak can list it in deps)
   const stop = useCallback(() => {
     if (useBackend) {
@@ -90,10 +105,7 @@ export function useVoiceOutput(
         audioRef.current.currentTime = 0;
         audioRef.current = null;
       }
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
+      // Do not revoke objectUrlRef here so replay can use it; clearReplay() or next speak() will revoke
       setIsSpeaking(false);
       return;
     }
@@ -108,6 +120,22 @@ export function useVoiceOutput(
     }
   }, [isSupported, useBackend]);
 
+  const replay = useCallback(() => {
+    if (!objectUrlRef.current || !useBackend) return;
+    const url = objectUrlRef.current;
+    const audio = new Audio(url);
+    audio.onended = () => {
+      audioRef.current = null;
+      setIsSpeaking(false);
+    };
+    audio.onerror = () => {
+      setIsSpeaking(false);
+    };
+    audioRef.current = audio;
+    setIsSpeaking(true);
+    audio.play();
+  }, [useBackend]);
+
   // Speak function
   const speak = useCallback(
     async (text: string) => {
@@ -118,6 +146,11 @@ export function useVoiceOutput(
       if (useBackend) {
         try {
           stop();
+          if (objectUrlRef.current) {
+            URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+          }
+          setCanReplay(false);
           setIsSpeaking(true);
           const blob = await apiClient.synthesizeSpeech(text, language);
           const url = URL.createObjectURL(blob);
@@ -125,10 +158,9 @@ export function useVoiceOutput(
           const audio = new Audio(url);
           audioRef.current = audio;
           audio.onended = () => {
-            if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-            objectUrlRef.current = null;
             audioRef.current = null;
             setIsSpeaking(false);
+            setCanReplay(true);
           };
           audio.onerror = () => {
             if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -219,5 +251,8 @@ export function useVoiceOutput(
     speak,
     stop,
     isSupported,
+    replay,
+    canReplay,
+    clearReplay,
   };
 }

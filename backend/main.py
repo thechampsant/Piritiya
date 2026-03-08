@@ -582,7 +582,7 @@ async def speech_synthesize(request: SynthesizeRequest):
             Text=request.text,
             OutputFormat="mp3",
             VoiceId=voice_id,
-            Engine="neural",
+            Engine="standard",
         )
         audio_bytes = resp["AudioStream"].read()
         return Response(content=audio_bytes, media_type="audio/mpeg")

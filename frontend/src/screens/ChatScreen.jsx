@@ -7,6 +7,7 @@ import { useChatContext } from '../contexts/ChatContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useApp } from '../contexts/AppContext';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useVoiceOutput } from '../hooks/useVoiceOutput';
 import { VOICE_LANGUAGE_CONFIG } from '../utils/constants';
 import SoilMoistureDisplay from '../components/SoilMoistureDisplay';
 import CropRecommendationList from '../components/CropRecommendationList';
@@ -38,6 +39,8 @@ const ChatScreen = ({ onNavigate }) => {
   const { language, formatTime } = useLanguage();
   const { state: appState, setLanguage } = useApp();
   const useBackendVoice = appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.transcribeRT ?? false);
+  const useBackendPolly = appState.isOnline && appState.useAwsVoice && (VOICE_LANGUAGE_CONFIG[language]?.polly ?? false);
+  const { speak, replay, canReplay, clearReplay } = useVoiceOutput(language, { useBackend: useBackendPolly });
   const {
     isListening,
     isProcessing,
@@ -50,9 +53,12 @@ const ChatScreen = ({ onNavigate }) => {
     isSupported,
     orbState,
     cancelVoicePipeline,
+    silenceCountdownProgress,
+    liveInterimTranscript,
   } = useVoiceInput(language, {
     useBackend: useBackendVoice,
     sendMessage: useBackendVoice ? sendMessage : undefined,
+    onRecordingStart: clearReplay,
   });
 
   const [showLangSheet, setShowLangSheet] = useState(false);
@@ -85,7 +91,7 @@ const ChatScreen = ({ onNavigate }) => {
     }
   }, [messages.length]);
 
-  // Answer ready: when bot reply arrives (isLoading true -> false), show "Answer ready", beep, vibrate
+  // Answer ready: when bot reply arrives (isLoading true -> false), show "Answer ready", beep, vibrate, optionally speak
   useEffect(() => {
     const wasLoading = prevLoadingRef.current;
     prevLoadingRef.current = isLoading;
@@ -97,10 +103,14 @@ const ChatScreen = ({ onNavigate }) => {
           navigator.vibrate(100);
         } catch (_) {}
       }
+      const lastBot = messages.length > 0 && messages[messages.length - 1]?.sender === 'bot'
+        ? messages[messages.length - 1].text
+        : null;
+      if (lastBot && appState.voiceEnabled) speak(lastBot);
       const t = setTimeout(() => setShowAnswerReady(false), 1500);
       return () => clearTimeout(t);
     }
-  }, [isLoading]);
+  }, [isLoading, messages, appState.voiceEnabled, speak]);
 
   useEffect(() => {
     if (useBackendVoice) return;
@@ -111,17 +121,17 @@ const ChatScreen = ({ onNavigate }) => {
 
   const handleVoiceOrbClick = () => {
     if (!appState.voiceEnabled || !isSupported || isLoading) return;
-    if (isListening) stopListening();
+    if (isListening) cancelVoicePipeline();
     else startListening();
   };
 
   const getOrbStatusLabel = () => {
     switch (orbState) {
-      case 'RECORDING': return t('listening');
+      case 'RECORDING': return t('voiceOrbListening');
       case 'TRANSCRIBING': return t('voiceOrbTranscribing');
       case 'THINKING': return t('voiceOrbThinking');
       case 'SUCCESS': return t('voiceOrbSuccess');
-      case 'ERROR': return t('tryAgain');
+      case 'ERROR': return t('voiceOrbError');
       default: return '';
     }
   };
@@ -495,6 +505,32 @@ const ChatScreen = ({ onNavigate }) => {
           orbState={useBackendVoice ? orbState : undefined}
           statusLabel={useBackendVoice ? getOrbStatusLabel() : undefined}
           transcriptPreview={useBackendVoice && (orbState === 'TRANSCRIBING' || orbState === 'THINKING') ? transcript : undefined}
+          liveInterimTranscript={useBackendVoice ? liveInterimTranscript : undefined}
+          silenceCountdownProgress={useBackendVoice ? silenceCountdownProgress : 0}
+          frequencyData={useBackendVoice ? frequencyData : []}
+          replayButton={useBackendVoice && orbState === 'SUCCESS' && canReplay ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); replay(); }}
+              style={{
+                marginTop: 4,
+                padding: '8px 16px',
+                borderRadius: radii.full,
+                border: `1px solid ${colors.border.default}`,
+                background: colors.bg.card,
+                color: colors.text.primary,
+                fontSize: typography.size.sm,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              aria-label={language === 'hi' ? 'फिर से सुनें' : 'Play again'}
+            >
+              <span aria-hidden>🔊</span>
+              {language === 'hi' ? 'फिर से सुनें' : 'Play again'}
+            </button>
+          ) : null}
           onCancel={useBackendVoice ? cancelVoicePipeline : undefined}
           onPress={handleVoiceOrbClick}
           label={t('tapToSpeak')}

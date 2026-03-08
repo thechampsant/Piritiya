@@ -79,6 +79,8 @@ const HomeScreen = ({ onNavigate }) => {
     isSupported,
     orbState,
     cancelVoicePipeline,
+    silenceCountdownProgress,
+    liveInterimTranscript,
   } = useVoiceInput(language, {
     useBackend: useBackendVoice,
     sendMessage: useBackendVoice ? sendMessage : undefined,
@@ -187,17 +189,17 @@ const HomeScreen = ({ onNavigate }) => {
 
   const handleVoiceOrbClick = () => {
     if (!appState.voiceEnabled || !isSupported) return;
-    if (isListening) stopListening();
+    if (isListening) cancelVoicePipeline();
     else startListening();
   };
 
   const getOrbStatusLabel = () => {
     switch (orbState) {
-      case 'RECORDING': return getTranslation('listening', language);
+      case 'RECORDING': return getTranslation('voiceOrbListening', language);
       case 'TRANSCRIBING': return getTranslation('voiceOrbTranscribing', language);
       case 'THINKING': return getTranslation('voiceOrbThinking', language);
       case 'SUCCESS': return getTranslation('voiceOrbSuccess', language);
-      case 'ERROR': return getTranslation('tryAgain', language);
+      case 'ERROR': return getTranslation('voiceOrbError', language);
       default: return '';
     }
   };
@@ -784,6 +786,9 @@ const HomeScreen = ({ onNavigate }) => {
           orbState={useBackendVoice ? orbState : undefined}
           statusLabel={useBackendVoice ? getOrbStatusLabel() : undefined}
           transcriptPreview={useBackendVoice && (orbState === 'TRANSCRIBING' || orbState === 'THINKING') ? transcript : undefined}
+          liveInterimTranscript={useBackendVoice ? liveInterimTranscript : undefined}
+          silenceCountdownProgress={useBackendVoice ? silenceCountdownProgress : 0}
+          frequencyData={useBackendVoice ? frequencyData : []}
           onCancel={useBackendVoice ? cancelVoicePipeline : undefined}
           onPress={handleVoiceOrbClick}
           label={getTranslation('tapToSpeak', language)}

@@ -203,6 +203,7 @@ export const animation = {
     @keyframes orbRippleRed { 0% { transform:scale(1); opacity:0.5 } 100% { transform:scale(2); opacity:0 } }
     @keyframes orbBreathSlow { 0%,100% { transform:scale(1) } 50% { transform:scale(1.06) } }
     @keyframes orbSuccessFlash { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(19,136,8,0.4) } 50% { opacity:1; box-shadow:0 0 0 12px rgba(19,136,8,0) } }
+    @keyframes orbDashedSpin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
     @keyframes slideUp   { from { transform:translateY(100%); opacity:0 } to { transform:translateY(0); opacity:1 } }
     @keyframes beetleWiggle { 0%,100% { transform:rotate(-8deg) } 25% { transform:rotate(8deg) } 50% { transform:rotate(-5deg) } 75% { transform:rotate(5deg) } }
   `,

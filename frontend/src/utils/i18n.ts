@@ -103,6 +103,10 @@ const translations = {
     en: 'Processing...',
     hi: 'समझ रहा हूँ...',
   },
+  voiceOrbListening: {
+    en: 'Listening...',
+    hi: 'सुन रहा हूं...',
+  },
   voiceOrbTranscribing: {
     en: 'Understanding...',
     hi: 'समझ रहा हूं...',
@@ -114,6 +118,10 @@ const translations = {
   voiceOrbSuccess: {
     en: 'Got your answer ✓',
     hi: 'जवाब मिल गया ✓',
+  },
+  voiceOrbError: {
+    en: 'Try again',
+    hi: 'फिर से कोशिश करें',
   },
   answerReady: {
     en: 'Answer ready',

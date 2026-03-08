@@ -53,6 +53,18 @@ function vibrate(pattern: number | number[]): void {
 
 export type VoiceOrbState = 'IDLE' | 'RECORDING' | 'TRANSCRIBING' | 'THINKING' | 'SUCCESS' | 'ERROR';
 
+const SILENCE_THRESHOLD = 0.01;
+/** Amplitude must stay below threshold for this long before starting the 500ms countdown. */
+const SILENCE_DURATION_MS = 1500;
+/** After silence detected, countdown ring fills over this time then auto-stop. */
+const COUNTDOWN_BEFORE_STOP_MS = 500;
+/** Hard cap: stop recording after this duration regardless of speech. */
+const MAX_RECORDING_MS = 8000;
+/** Max wait for streaming final after sendEnd(); fallback to lastFinal or batch after this. */
+const STREAMING_FINAL_TIMEOUT_MS = 2500;
+/** Delay before showing THINKING state after transcript is ready (UX). */
+const PRE_THINKING_DELAY_MS = 250;
+
 interface UseVoiceInputReturn {
   isListening: boolean;
   isProcessing: boolean;
@@ -67,6 +79,10 @@ interface UseVoiceInputReturn {
   orbState: VoiceOrbState;
   /** Abort in-flight transcribe/chat and return to IDLE (only relevant when orbState is TRANSCRIBING or THINKING) */
   cancelVoicePipeline: () => void;
+  /** 0 = not in countdown, 0..1 = silence countdown progress (for ring animation). Only when useBackend and RECORDING. */
+  silenceCountdownProgress: number;
+  /** Live interim transcript from Web Speech during RECORDING (for pill above orb). Cleared when leaving RECORDING. */
+  liveInterimTranscript: string;
 }
 
 export interface UseVoiceInputOptions {
@@ -76,6 +92,8 @@ export interface UseVoiceInputOptions {
   sendMessage?: (text: string, options?: { signal?: AbortSignal }) => Promise<unknown>;
   /** When useBackend: called after SUCCESS state before returning to IDLE (e.g. navigate to chat) */
   onComplete?: () => void;
+  /** Called when recording starts (e.g. to clear replay button) */
+  onRecordingStart?: () => void;
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
@@ -100,7 +118,7 @@ export function useVoiceInput(
   language: Language,
   options: UseVoiceInputOptions = {}
 ): UseVoiceInputReturn {
-  const { useBackend = false, sendMessage: sendMessageOpt, onComplete } = options;
+  const { useBackend = false, sendMessage: sendMessageOpt, onComplete, onRecordingStart } = options;
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -109,14 +127,25 @@ export function useVoiceInput(
   const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
   const [frequencyData, setFrequencyData] = useState<number[]>([]);
   const [orbState, setOrbState] = useState<VoiceOrbState>('IDLE');
+  const [silenceCountdownProgress, setSilenceCountdownProgress] = useState(0);
+  const [liveInterimTranscript, setLiveInterimTranscript] = useState('');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const interimRecognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const silenceStartTimeRef = useRef<number | null>(null);
+  /** When set, we're in the 500ms countdown phase (ring fills, then stop). */
+  const countdownStartTimeRef = useRef<number | null>(null);
+  const maxRecordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelRequestedRef = useRef(false);
+  const stopListeningRef = useRef<() => void>(() => {});
+  /** Resolves waitForFinal when backend sends a final transcript after sendEnd(). */
+  const finalResolverRef = useRef<((text: string) => void) | null>(null);
   /** When using streaming transcribe: handle and last final transcript. */
   const transcribeStreamRef = useRef<{
     sendChunk: (chunk: ArrayBuffer) => void;
@@ -161,19 +190,20 @@ export function useVoiceInput(
     const locale = language === 'hi' ? 'hi-IN' : 'en-IN';
     recognition.lang = locale;
 
-    // Configure for better UX on slow networks
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
-    // Handle recognition results
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const results = event.results;
       const lastResult = results[results.length - 1];
+      const text = lastResult[0]?.transcript ?? '';
 
       if (lastResult.isFinal) {
-        const transcribedText = lastResult[0].transcript;
-        setTranscript(transcribedText);
+        setTranscript(text);
+        setLiveInterimTranscript('');
         setError(null);
+      } else {
+        setLiveInterimTranscript(text);
       }
     };
 
@@ -223,23 +253,46 @@ export function useVoiceInput(
     };
   }, [language, useBackend]);
 
-  // Waveform: rAF loop when recording (backend path with analyser)
+  // Voice activity bars (RMS) + silence detection: 1.5s silence then 500ms countdown ring, then auto-stop
   useEffect(() => {
     if (!isListening || !useBackend || !analyserRef.current) return;
     const analyser = analyserRef.current;
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const timeData = new Float32Array(analyser.fftSize);
 
     const tick = () => {
       if (!analyserRef.current) return;
-      analyser.getByteFrequencyData(dataArray);
-      const step = Math.floor(dataArray.length / FREQUENCY_BARS);
-      const bars: number[] = [];
-      for (let i = 0; i < FREQUENCY_BARS; i++) {
-        let sum = 0;
-        for (let j = 0; j < step; j++) sum += dataArray[i * step + j] ?? 0;
-        bars.push(Math.min(255, Math.round(sum / step)));
+      analyser.getFloatTimeDomainData(timeData);
+      let sumSq = 0;
+      for (let i = 0; i < timeData.length; i++) sumSq += timeData[i] * timeData[i];
+      const rms = Math.sqrt(sumSq / timeData.length);
+      const normalized = Math.min(1, rms * 10);
+      const barVal = Math.round(normalized * 255);
+      setFrequencyData(Array(FREQUENCY_BARS).fill(barVal));
+
+      if (rms < SILENCE_THRESHOLD) {
+        const now = Date.now();
+        if (silenceStartTimeRef.current === null) silenceStartTimeRef.current = now;
+        const elapsed = now - silenceStartTimeRef.current;
+        if (elapsed >= SILENCE_DURATION_MS) {
+          if (countdownStartTimeRef.current === null) countdownStartTimeRef.current = Date.now();
+          const countdownElapsed = now - countdownStartTimeRef.current;
+          const progress = Math.min(1, countdownElapsed / COUNTDOWN_BEFORE_STOP_MS);
+          setSilenceCountdownProgress(progress);
+          if (progress >= 1) {
+            silenceStartTimeRef.current = null;
+            countdownStartTimeRef.current = null;
+            setSilenceCountdownProgress(0);
+            stopListeningRef.current();
+          }
+        } else {
+          setSilenceCountdownProgress(0);
+        }
+      } else {
+        silenceStartTimeRef.current = null;
+        countdownStartTimeRef.current = null;
+        setSilenceCountdownProgress(0);
       }
-      setFrequencyData(bars);
+
       rafIdRef.current = requestAnimationFrame(tick);
     };
     rafIdRef.current = requestAnimationFrame(tick);
@@ -249,6 +302,9 @@ export function useVoiceInput(
         rafIdRef.current = null;
       }
       setFrequencyData([]);
+      silenceStartTimeRef.current = null;
+      countdownStartTimeRef.current = null;
+      setSilenceCountdownProgress(0);
     };
   }, [isListening, useBackend]);
 
@@ -274,10 +330,37 @@ export function useVoiceInput(
       try {
         setTranscript('');
         setError(null);
+        setLiveInterimTranscript('');
+        setSilenceCountdownProgress(0);
+        cancelRequestedRef.current = false;
         setOrbState('RECORDING');
         setIsListening(true);
+        onRecordingStart?.();
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         chunksRef.current = [];
+
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognitionAPI) {
+          const interimRec = new SpeechRecognitionAPI();
+          interimRec.continuous = true;
+          interimRec.interimResults = true;
+          interimRec.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+          interimRec.onresult = (event: SpeechRecognitionEvent) => {
+            const results = event.results;
+            const last = results[results.length - 1];
+            if (!last?.length) return;
+            const text = last[0]?.transcript ?? '';
+            if (!last.isFinal) setLiveInterimTranscript(text);
+          };
+          interimRec.onerror = () => {};
+          interimRec.onend = () => {};
+          interimRecognitionRef.current = interimRec;
+          try {
+            interimRec.start();
+          } catch {
+            interimRecognitionRef.current = null;
+          }
+        }
 
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const analyser = ctx.createAnalyser();
@@ -310,6 +393,10 @@ export function useVoiceInput(
             handle.onTranscript((ev) => {
               if (ev.type === 'final' && transcribeStreamRef.current)
                 transcribeStreamRef.current.lastFinal = ev.transcript;
+              if (ev.type === 'final' && finalResolverRef.current) {
+                finalResolverRef.current(ev.transcript);
+                finalResolverRef.current = null;
+              }
               setTranscript((prev) => (ev.type === 'final' ? ev.transcript : prev + ev.transcript));
             });
             const ctx = audioContextRef.current;
@@ -342,17 +429,61 @@ export function useVoiceInput(
           });
 
         recorder.onstop = async () => {
+          if (maxRecordingTimeoutRef.current) {
+            clearTimeout(maxRecordingTimeoutRef.current);
+            maxRecordingTimeoutRef.current = null;
+          }
+          setLiveInterimTranscript('');
+          if (interimRecognitionRef.current) {
+            try {
+              interimRecognitionRef.current.abort();
+            } catch {
+              // ignore
+            }
+            interimRecognitionRef.current = null;
+          }
           stream.getTracks().forEach((t) => t.stop());
           mediaRecorderRef.current = null;
           setIsListening(false);
           setRecordingStartedAt(null);
           setFrequencyData([]);
+          setSilenceCountdownProgress(0);
+          silenceStartTimeRef.current = null;
+
+          if (cancelRequestedRef.current) {
+            cancelRequestedRef.current = false;
+            countdownStartTimeRef.current = null;
+            const streamRef = transcribeStreamRef.current;
+            if (streamRef) {
+              const proc = (streamRef as unknown as { _processor?: ScriptProcessorNode & { _piritiyaDisconnect?: () => void } })._processor;
+              if (proc?._piritiyaDisconnect) proc._piritiyaDisconnect();
+              streamRef.sendEnd();
+              transcribeStreamRef.current = null;
+            }
+            if (audioContextRef.current) {
+              try {
+                await audioContextRef.current.close();
+              } catch {
+                // ignore
+              }
+              audioContextRef.current = null;
+            }
+            analyserRef.current = null;
+            setOrbState('IDLE');
+            setIsProcessing(false);
+            abortControllerRef.current = null;
+            return;
+          }
+
           const streamRef = transcribeStreamRef.current;
+          let waitForFinal: Promise<string> | null = null;
           if (streamRef) {
             const proc = (streamRef as unknown as { _processor?: ScriptProcessorNode & { _piritiyaDisconnect?: () => void } })._processor;
             if (proc?._piritiyaDisconnect) proc._piritiyaDisconnect();
+            waitForFinal = new Promise<string>((resolve) => {
+              finalResolverRef.current = resolve;
+            });
             streamRef.sendEnd();
-            transcribeStreamRef.current = null;
           }
           if (audioContextRef.current) {
             try {
@@ -379,6 +510,7 @@ export function useVoiceInput(
           setError(null);
 
           const handleAbort = () => {
+            finalResolverRef.current = null;
             setOrbState('IDLE');
             setIsProcessing(false);
             abortControllerRef.current = null;
@@ -394,14 +526,31 @@ export function useVoiceInput(
 
           try {
             let text: string;
-            if (streamRef) {
-              await delay(700, signal);
+            if (streamRef && waitForFinal) {
+              let result: string | undefined;
+              try {
+                result = await Promise.race([
+                  waitForFinal,
+                  delay(STREAMING_FINAL_TIMEOUT_MS, signal).then(() => undefined),
+                ]);
+              } catch (e) {
+                if (e instanceof DOMException && e.name === 'AbortError') {
+                  handleAbort();
+                  return;
+                }
+                throw e;
+              }
               if (signal.aborted) {
                 handleAbort();
                 return;
               }
-              text = (streamRef.lastFinal || '').trim() || (await apiClient.transcribeAudio(blob, languageCode, { signal }).then((r) => r.transcript || '')) || '';
+              text = (typeof result === 'string' ? result : (streamRef.lastFinal || '').trim()) || '';
+              if (!text) {
+                text = (await apiClient.transcribeAudio(blob, languageCode, { signal }).then((r) => r.transcript || '')) || '';
+              }
+              transcribeStreamRef.current = null;
             } else {
+              if (streamRef) transcribeStreamRef.current = null;
               const result = await apiClient.transcribeAudio(blob, languageCode, { signal });
               text = result.transcript || '';
             }
@@ -410,7 +559,7 @@ export function useVoiceInput(
               handleAbort();
               return;
             }
-            await delay(800, signal);
+            await delay(PRE_THINKING_DELAY_MS, signal);
             if (signal.aborted) {
               handleAbort();
               return;
@@ -461,6 +610,9 @@ export function useVoiceInput(
         setRecordingStartedAt(Date.now());
         vibrate(50);
         playVoiceBeep('start');
+        maxRecordingTimeoutRef.current = setTimeout(() => {
+          if (mediaRecorderRef.current?.state === 'recording') stopListeningRef.current();
+        }, MAX_RECORDING_MS);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to start recording'));
         setIsListening(false);
@@ -482,7 +634,7 @@ export function useVoiceInput(
       setIsListening(false);
       vibrate([100, 50, 100, 50, 100]);
     }
-  }, [isSupported, isListening, useBackend, language, sendMessageOpt, onComplete]);
+  }, [isSupported, isListening, useBackend, language, sendMessageOpt, onComplete, onRecordingStart]);
 
   // Stop listening function
   const stopListening = useCallback(() => {
@@ -503,11 +655,36 @@ export function useVoiceInput(
     }
   }, [isListening, useBackend]);
 
-  // Abort in-flight transcribe/chat and return orb to IDLE
+  useEffect(() => {
+    stopListeningRef.current = stopListening;
+  }, [stopListening]);
+
+  // Abort in-flight transcribe/chat and return orb to IDLE (including during RECORDING). Second tap = cancel only.
   const cancelVoicePipeline = useCallback(() => {
+    if (maxRecordingTimeoutRef.current) {
+      clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = null;
+    }
+    setLiveInterimTranscript('');
+    setSilenceCountdownProgress(0);
+    silenceStartTimeRef.current = null;
+    countdownStartTimeRef.current = null;
+    if (interimRecognitionRef.current) {
+      try {
+        interimRecognitionRef.current.abort();
+      } catch {
+        // ignore
+      }
+      interimRecognitionRef.current = null;
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state === 'recording') {
+      cancelRequestedRef.current = true;
+      mediaRecorderRef.current.stop();
+      return;
     }
     setOrbState('IDLE');
     setIsProcessing(false);
@@ -545,5 +722,7 @@ export function useVoiceInput(
     isSupported,
     orbState,
     cancelVoicePipeline,
+    silenceCountdownProgress,
+    liveInterimTranscript,
   };
 }

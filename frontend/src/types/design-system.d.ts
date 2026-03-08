@@ -14,6 +14,14 @@ declare module '@ds/components' {
     isListening?: boolean;
     isProcessing?: boolean;
     isError?: boolean;
+    orbState?: 'IDLE' | 'RECORDING' | 'TRANSCRIBING' | 'THINKING' | 'SUCCESS' | 'ERROR';
+    statusLabel?: string;
+    transcriptPreview?: string;
+    liveInterimTranscript?: string;
+    silenceCountdownProgress?: number;
+    frequencyData?: number[];
+    replayButton?: ReactNode;
+    onCancel?: () => void;
     onPress?: () => void;
     size?: number;
     label?: string;
