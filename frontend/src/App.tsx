@@ -132,6 +132,7 @@ function App() {
         @keyframes slideUp { from { transform:translateY(100%); opacity:0 } to { transform:translateY(0); opacity:1 } }
         @keyframes beetleWiggle { 0%,100% { transform:rotate(-8deg) } 25% { transform:rotate(8deg) } 50% { transform:rotate(-5deg) } 75% { transform:rotate(5deg) } }
         @keyframes advisorySkeletonPulse { 0%,100% { opacity:0.6 } 50% { opacity:1 } }
+        @keyframes fadeInSection { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
         input::placeholder { color: rgba(0,0,0,0.3); }
         ::-webkit-scrollbar { display: none; }
         .sr-only {

@@ -12,6 +12,7 @@ import SoilMoistureDisplay from '../components/SoilMoistureDisplay';
 import CropRecommendationList from '../components/CropRecommendationList';
 import MarketPriceTable from '../components/MarketPriceTable';
 import VoiceFeedback from '../components/VoiceFeedback';
+import AIResponseBubble from '../components/AIResponseBubble';
 import LangSheet from './components/LangSheet';
 import { playVoiceBeep } from '../utils/voiceSounds';
 
@@ -180,42 +181,31 @@ const ChatScreen = ({ onNavigate }) => {
         style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: spacing['4'] }}
       >
         <div style={{ maxWidth: '78%' }}>
-          <FrostedCard>
-            <div
-              style={{
-                fontFamily: typography.fonts.serif,
-                fontSize: '14px',
-                lineHeight: 1.6,
-                color: colors.text.primary,
-                marginBottom: spacing['2'],
-              }}
-            >
-              {message.text}
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: spacing['2'],
-                fontSize: typography.size.xs,
-                color: colors.text.secondary,
-              }}
-            >
-              {message.isOffline && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: spacing['1'] }}>
-                  <WifiOff size={12} color={colors.text.secondary} />
-                  <span>{t('offline')}</span>
-                </div>
-              )}
-              {message.status === 'sent' && !message.isOffline && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: spacing['1'] }}>
-                  <Archive size={12} color={colors.text.secondary} />
-                  <span>{language === 'hi' ? 'कैश' : 'Cached'}</span>
-                </div>
-              )}
-              <span>{formatTime(message.timestamp)}</span>
-            </div>
-          </FrostedCard>
+          <AIResponseBubble text={message.text} />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: spacing['2'],
+              fontSize: typography.size.xs,
+              color: colors.text.secondary,
+              marginTop: spacing['2'],
+            }}
+          >
+            {message.isOffline && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing['1'] }}>
+                <WifiOff size={12} color={colors.text.secondary} />
+                <span>{t('offline')}</span>
+              </div>
+            )}
+            {message.status === 'sent' && !message.isOffline && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing['1'] }}>
+                <Archive size={12} color={colors.text.secondary} />
+                <span>{language === 'hi' ? 'कैश' : 'Cached'}</span>
+              </div>
+            )}
+            <span>{formatTime(message.timestamp)}</span>
+          </div>
 
           {structuredData && (
             <div style={{ marginTop: spacing['3'] }}>
