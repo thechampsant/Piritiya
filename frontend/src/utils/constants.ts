@@ -13,8 +13,15 @@ export const API_ENDPOINTS = {
   ADVICE: '/advice',
   HEALTH: '/health',
   TRANSCRIBE: '/speech/transcribe',
+  TRANSCRIBE_STREAM_WS: '/speech/transcribe/stream',
   SYNTHESIZE: '/speech/synthesize',
 } as const;
+
+/** Base URL for WebSocket (http -> ws, https -> wss). */
+export function getTranscribeStreamWsUrl(): string {
+  const base = API_BASE_URL.replace(/^http/, 'ws');
+  return `${base}${API_ENDPOINTS.TRANSCRIBE_STREAM_WS}`;
+}
 
 /** WhatsApp link for Contact Support in Settings. Replace with real number as needed. */
 export const SUPPORT_WHATSAPP_URL = 'https://wa.me/919876543210';
@@ -59,9 +66,24 @@ export const VOICE_LANGUAGE_CONFIG: Record<string, { polly: boolean; transcribeR
   te: { polly: false, transcribeRT: false },
 };
 
+// Pre-fetch cache TTL (for Bedrock context)
+export const PREFETCH_TTL_SOIL_MS = 30 * 60 * 1000; // 30 min
+export const PREFETCH_TTL_MARKET_MS = 15 * 60 * 1000; // 15 min
+export const PREFETCH_TTL_GOVT_MS = 24 * 60 * 60 * 1000; // 24 h
+export const PREFETCH_TTL_CROP_MS = 30 * 60 * 1000; // 30 min
+
+export const PREFETCH_KEYS = {
+  SOIL_MOISTURE: 'soil_moisture',
+  CROP_ADVICE: 'crop_advice',
+  MARKET_PRICES: 'market_prices',
+  GOVT_SCHEMES: 'govt_schemes',
+} as const;
+
+export type PrefetchKey = (typeof PREFETCH_KEYS)[keyof typeof PREFETCH_KEYS];
+
 // IndexedDB Configuration
 export const DB_NAME = 'piritiya-db';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const DB_STORES = {
   MESSAGES: 'messages',
@@ -69,6 +91,7 @@ export const DB_STORES = {
   SETTINGS: 'settings',
   CACHED_RESPONSES: 'cachedResponses',
   PENDING_QUERIES: 'pendingQueries',
+  PREFETCH_CACHE: 'prefetchCache',
 } as const;
 
 // Quick Actions

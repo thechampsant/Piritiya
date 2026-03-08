@@ -115,16 +115,21 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
         const isOnline = navigator.onLine;
 
         if (isOnline) {
-          // Requirement 4.1: Send to API when online
+          // Requirement 4.1: Send to API when online; stream response so first tokens appear in ~800ms
           try {
-            const response = await apiClient.sendChatMessage(
-              text,
+            const cachedPrefetch = await apiClient.getPrefetchData();
+            const botMessageId = generateSessionId();
+            const botMessage: Message = {
+              id: botMessageId,
               sessionId,
-              farmerId,
-              { signal: options?.signal }
-            );
+              sender: 'bot',
+              text: '',
+              timestamp: Date.now(),
+              status: 'sending',
+            };
+            setMessages((prev) => [...prev, botMessage]);
+            await dbRepository.saveMessage(botMessage);
 
-            // Update user message status to sent
             userMessage.status = 'sent';
             await dbRepository.saveMessage(userMessage);
             setMessages((prev) =>
@@ -133,26 +138,36 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
               )
             );
 
-            // Create bot response message
-            const botMessage: Message = {
-              id: generateSessionId(),
+            const response = await apiClient.sendChatMessageStream(
+              text,
               sessionId,
-              sender: 'bot',
-              text: response.response,
-              timestamp: Date.now(),
-              status: 'sent',
-            };
+              farmerId,
+              {
+                signal: options?.signal,
+                cachedPrefetch: Object.keys(cachedPrefetch).length > 0 ? cachedPrefetch : undefined,
+                onChunk: (delta) => {
+                  setMessages((prev) => {
+                    const next = [...prev];
+                    const idx = next.findIndex((m) => m.id === botMessageId);
+                    if (idx >= 0) next[idx] = { ...next[idx], text: next[idx].text + delta };
+                    return next;
+                  });
+                },
+              }
+            );
 
-            // Add bot message to state and save to IndexedDB
-            setMessages((prev) => [...prev, botMessage]);
+            const fullText = response.response;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === botMessageId ? { ...msg, text: fullText, status: 'sent' } : msg
+              )
+            );
+            botMessage.text = fullText;
+            botMessage.status = 'sent';
             await dbRepository.saveMessage(botMessage);
 
-            onResponsePreview?.(response.response);
-
-            // Requirement 7.1: Cache response for offline access
-            await cacheManager.cacheAPIResponse(text, response.response);
-
-            // Update session message count
+            onResponsePreview?.(fullText);
+            await cacheManager.cacheAPIResponse(text, fullText);
             await incrementSessionMessageCount(sessionId);
             return response;
           } catch (apiError) {

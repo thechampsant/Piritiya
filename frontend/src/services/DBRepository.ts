@@ -6,7 +6,12 @@ import type {
   CachedResponse,
   PendingQuery,
 } from '../types';
-import { DB_NAME, DB_VERSION, DB_STORES } from '../utils/constants';
+import {
+  DB_NAME,
+  DB_VERSION,
+  DB_STORES,
+  type PrefetchKey,
+} from '../utils/constants';
 
 /**
  * DBRepository - IndexedDB wrapper for offline data storage
@@ -65,8 +70,55 @@ export class DBRepository {
           pendingStore.createIndex('sessionId', 'sessionId', { unique: false });
           pendingStore.createIndex('timestamp', 'timestamp', { unique: false });
         }
+
+        // Pre-fetch cache (soil, crop, market, govt) with TTL
+        if (!db.objectStoreNames.contains(DB_STORES.PREFETCH_CACHE)) {
+          db.createObjectStore(DB_STORES.PREFETCH_CACHE, { keyPath: 'key' });
+        }
       },
     });
+  }
+
+  /**
+   * Get a prefetch slot by key (returns null if missing or expired).
+   */
+  async getPrefetchSlot(key: PrefetchKey): Promise<{ data: unknown; expiresAt: number } | null> {
+    const db = await this.ensureDB();
+    const row = await db.get(DB_STORES.PREFETCH_CACHE, key);
+    if (!row || typeof row.expiresAt !== 'number' || row.expiresAt < Date.now()) return null;
+    return { data: row.data, expiresAt: row.expiresAt };
+  }
+
+  /**
+   * Set a prefetch slot with TTL.
+   */
+  async setPrefetchSlot(
+    key: PrefetchKey,
+    data: unknown,
+    expiresAt: number
+  ): Promise<void> {
+    const db = await this.ensureDB();
+    await db.put(DB_STORES.PREFETCH_CACHE, { key, data, expiresAt });
+  }
+
+  /**
+   * Get all non-expired prefetch slots as a single object for /chat cached_prefetch.
+   */
+  async getValidPrefetch(): Promise<Record<string, unknown>> {
+    const db = await this.ensureDB();
+    const out: Record<string, unknown> = {};
+    const keyNames: PrefetchKey[] = [
+      'soil_moisture',
+      'crop_advice',
+      'market_prices',
+      'govt_schemes',
+    ];
+    for (const key of keyNames) {
+      const row = await db.get(DB_STORES.PREFETCH_CACHE, key);
+      if (row && typeof row.expiresAt === 'number' && row.expiresAt >= Date.now() && row.data != null)
+        out[key] = row.data;
+    }
+    return out;
   }
 
   /**

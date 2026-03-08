@@ -60,6 +60,7 @@ export interface ChatRequest {
   message: string;
   session_id?: string;
   farmer_id?: string;
+  cached_prefetch?: Record<string, unknown>;
 }
 
 export interface ChatResponse {

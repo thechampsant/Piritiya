@@ -2,6 +2,7 @@
 Piritiya FastAPI Backend
 Simple agricultural advisory API without Bedrock
 """
+import asyncio
 import logging
 import os
 import json
@@ -15,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 import boto3
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from decimal import Decimal
 from pydantic import BaseModel
 from typing import Optional
@@ -73,6 +74,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     farmer_id: Optional[str] = None
+    cached_prefetch: Optional[dict] = None
 
 
 # Helper function to invoke Lambda
@@ -457,6 +459,116 @@ async def speech_transcribe(
         raise HTTPException(status_code=500, detail=f"Transcription failed: {err_msg}")
 
 
+@app.websocket("/speech/transcribe/stream")
+async def speech_transcribe_stream(websocket: WebSocket):
+    """
+    Streaming transcription via Amazon Transcribe. Client sends binary PCM chunks (16-bit, 16 kHz mono).
+    Server sends JSON messages: {"type": "partial"|"final", "transcript": "..."}.
+    Query params: language_code (hi-IN|en-IN), sample_rate (default 16000).
+    """
+    await websocket.accept()
+    language_code = websocket.query_params.get("language_code", "hi-IN")
+    try:
+        sample_rate = int(websocket.query_params.get("sample_rate", "16000"))
+    except ValueError:
+        sample_rate = 16000
+    if language_code not in ("hi-IN", "en-IN"):
+        await websocket.close(code=4000, reason="language_code must be hi-IN or en-IN")
+        return
+    try:
+        from amazon_transcribe.client import TranscribeStreamingClient
+    except ImportError:
+        logger.exception("amazon-transcribe not installed")
+        await websocket.send_json({"type": "error", "transcript": "Streaming not configured"})
+        await websocket.close()
+        return
+    try:
+        client = TranscribeStreamingClient(region=_region)
+        stream = await client.start_stream_transcription(
+            language_code=language_code,
+            media_sample_rate_hz=sample_rate,
+            media_encoding="pcm",
+        )
+        audio_queue = asyncio.Queue()
+        stream_ended = asyncio.Event()
+
+        async def receive_audio():
+            try:
+                while True:
+                    msg = await websocket.receive()
+                    if msg.get("type") == "websocket.disconnect":
+                        break
+                    if msg.get("type") == "websocket.receive":
+                        data = msg.get("bytes") or msg.get("text")
+                        if data is None:
+                            continue
+                        if isinstance(data, str):
+                            if data.strip() == "end":
+                                break
+                            continue
+                        await audio_queue.put(data)
+            except WebSocketDisconnect:
+                pass
+            finally:
+                stream_ended.set()
+
+        async def feed_audio():
+            try:
+                while not stream_ended.is_set():
+                    try:
+                        chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.5)
+                        if chunk:
+                            await stream.input_stream.send_audio_event(audio_chunk=chunk)
+                    except asyncio.TimeoutError:
+                        continue
+                while not audio_queue.empty():
+                    try:
+                        chunk = audio_queue.get_nowait()
+                        if chunk:
+                            await stream.input_stream.send_audio_event(audio_chunk=chunk)
+                    except (LookupError, Exception):
+                        break
+                await stream.input_stream.end_stream()
+            except Exception as e:
+                logger.exception("feed_audio: %s", e)
+
+        async def consume_transcripts():
+            try:
+                async for event in stream.output_stream:
+                    transcript_obj = getattr(event, "transcript", None)
+                    if transcript_obj is None:
+                        continue
+                    results = getattr(transcript_obj, "results", []) or []
+                    for result in results:
+                        is_final = getattr(result, "is_partial", True) is False
+                        alts = getattr(result, "alternatives", []) or []
+                        for alt in alts:
+                            transcript_text = getattr(alt, "transcript", "") or ""
+                            if not transcript_text:
+                                continue
+                            msg_type = "final" if is_final else "partial"
+                            await websocket.send_json({"type": msg_type, "transcript": transcript_text})
+            except Exception as e:
+                logger.exception("consume_transcripts: %s", e)
+
+        await asyncio.gather(
+            receive_audio(),
+            feed_audio(),
+            consume_transcripts(),
+        )
+    except Exception as e:
+        logger.exception("Transcribe stream error: %s", e)
+        try:
+            await websocket.send_json({"type": "error", "transcript": str(e)})
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
 @app.post("/speech/synthesize")
 async def speech_synthesize(request: SynthesizeRequest):
     """
@@ -507,6 +619,16 @@ async def chat_with_agent(body: ChatRequest):
     if farmer_id:
         input_text = f"[Farmer ID: {farmer_id}] {message}"
 
+    if body.cached_prefetch and isinstance(body.cached_prefetch, dict) and len(body.cached_prefetch) > 0:
+        cache_blob = json.dumps(body.cached_prefetch, ensure_ascii=False)
+        input_text = (
+            "The following data is already available. Use it to answer; do not call get_soil_moisture, "
+            "get_crop_advice, get_market_prices, get_govt_schemes.\n\n[Cached data]\n"
+            + cache_blob
+            + "\n\n[User message]\n"
+            + input_text
+        )
+
     try:
         bedrock_agent = boto3.client('bedrock-agent-runtime', region_name=os.getenv('AWS_REGION', 'us-east-1'))
 
@@ -517,20 +639,27 @@ async def chat_with_agent(body: ChatRequest):
             inputText=input_text
         )
 
-        # Process streaming response
-        result = ""
-        for event in response['completion']:
-            if 'chunk' in event:
-                chunk = event['chunk']
-                if 'bytes' in chunk:
-                    result += chunk['bytes'].decode('utf-8')
+        def event_stream():
+            for event in response.get("completion", []) or []:
+                if event is None:
+                    continue
+                chunk = event.get("chunk") if isinstance(event, dict) else None
+                if not chunk or not isinstance(chunk, dict):
+                    continue
+                raw = chunk.get("bytes")
+                if raw is None:
+                    continue
+                try:
+                    delta = raw.decode("utf-8")
+                except Exception:
+                    continue
+                yield f"data: {json.dumps({'delta': delta})}\n\n"
 
-        return {
-            "response": result,
-            "session_id": session_id,
-            "message": message
-        }
-
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent invocation failed: {str(e)}")
 

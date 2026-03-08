@@ -117,6 +117,13 @@ export function useVoiceInput(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  /** When using streaming transcribe: handle and last final transcript. */
+  const transcribeStreamRef = useRef<{
+    sendChunk: (chunk: ArrayBuffer) => void;
+    sendEnd: () => void;
+    onTranscript: (cb: (event: { type: 'partial' | 'final'; transcript: string }) => void) => void;
+    lastFinal: string;
+  } | null>(null);
 
   // Check browser compatibility on mount
   useEffect(() => {
@@ -289,12 +296,64 @@ export function useVoiceInput(
           if (e.data.size > 0) chunksRef.current.push(e.data);
         };
 
+        // Optional: open streaming transcribe so TRANSCRIBING shows while still recording
+        const languageCode = language === 'hi' ? 'hi-IN' : 'en-IN';
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        const signal = controller.signal;
+        apiClient
+          .openTranscribeStream(languageCode, { signal, sampleRate: 16000 })
+          .then((handle) => {
+            if (signal.aborted || !audioContextRef.current || !source) return;
+            transcribeStreamRef.current = { ...handle, lastFinal: '' };
+            setOrbState('TRANSCRIBING');
+            handle.onTranscript((ev) => {
+              if (ev.type === 'final' && transcribeStreamRef.current)
+                transcribeStreamRef.current.lastFinal = ev.transcript;
+              setTranscript((prev) => (ev.type === 'final' ? ev.transcript : prev + ev.transcript));
+            });
+            const ctx = audioContextRef.current;
+            const sampleRate = ctx.sampleRate;
+            const ratio = sampleRate / 16000;
+            const bufferLength = 4096;
+            const processor = ctx.createScriptProcessor(bufferLength, 1, 1);
+            processor.onaudioprocess = (e: AudioProcessingEvent) => {
+              const ref = transcribeStreamRef.current;
+              if (!ref) return;
+              const input = e.inputBuffer.getChannelData(0);
+              const outLength = Math.floor(input.length / ratio);
+              const pcm = new Int16Array(outLength);
+              for (let i = 0; i < outLength; i++) {
+                const src = input[Math.min(Math.floor(i * ratio), input.length - 1)];
+                pcm[i] = Math.max(-32768, Math.min(32767, Math.floor(src * 32767)));
+              }
+              ref.sendChunk(pcm.buffer);
+            };
+            source.connect(processor);
+            processor.connect(ctx.destination);
+            (processor as unknown as { _piritiyaDisconnect: () => void })._piritiyaDisconnect = () => {
+              processor.disconnect();
+              source.disconnect(processor);
+            };
+            (transcribeStreamRef.current as unknown as { _processor?: ScriptProcessorNode })._processor = processor;
+          })
+          .catch(() => {
+            transcribeStreamRef.current = null;
+          });
+
         recorder.onstop = async () => {
           stream.getTracks().forEach((t) => t.stop());
           mediaRecorderRef.current = null;
           setIsListening(false);
           setRecordingStartedAt(null);
           setFrequencyData([]);
+          const streamRef = transcribeStreamRef.current;
+          if (streamRef) {
+            const proc = (streamRef as unknown as { _processor?: ScriptProcessorNode & { _piritiyaDisconnect?: () => void } })._processor;
+            if (proc?._piritiyaDisconnect) proc._piritiyaDisconnect();
+            streamRef.sendEnd();
+            transcribeStreamRef.current = null;
+          }
           if (audioContextRef.current) {
             try {
               await audioContextRef.current.close();
@@ -305,16 +364,17 @@ export function useVoiceInput(
           }
           analyserRef.current = null;
           vibrate([50, 50, 50]);
-          if (chunksRef.current.length === 0) {
+          const blob = new Blob(chunksRef.current, { type: mime });
+          const languageCode = language === 'hi' ? 'hi-IN' : 'en-IN';
+          if (!streamRef && chunksRef.current.length === 0) {
             setOrbState('IDLE');
             return;
           }
-          const blob = new Blob(chunksRef.current, { type: mime });
-          const languageCode = language === 'hi' ? 'hi-IN' : 'en-IN';
-          const controller = new AbortController();
-          abortControllerRef.current = controller;
+          if (!streamRef) {
+            abortControllerRef.current = controller;
+          }
           const signal = controller.signal;
-          setOrbState('TRANSCRIBING');
+          if (!streamRef) setOrbState('TRANSCRIBING');
           setIsProcessing(true);
           setError(null);
 
@@ -333,8 +393,18 @@ export function useVoiceInput(
           };
 
           try {
-            const result = await apiClient.transcribeAudio(blob, languageCode, { signal });
-            const text = result.transcript || '';
+            let text: string;
+            if (streamRef) {
+              await delay(700, signal);
+              if (signal.aborted) {
+                handleAbort();
+                return;
+              }
+              text = (streamRef.lastFinal || '').trim() || (await apiClient.transcribeAudio(blob, languageCode, { signal }).then((r) => r.transcript || '')) || '';
+            } else {
+              const result = await apiClient.transcribeAudio(blob, languageCode, { signal });
+              text = result.transcript || '';
+            }
             setTranscript(text);
             if (signal.aborted) {
               handleAbort();

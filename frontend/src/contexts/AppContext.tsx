@@ -146,6 +146,15 @@ export function AppProvider({ children }: AppProviderProps) {
   }, [isOnline]);
 
   /**
+   * Pre-fetch soil, crop, market, govt data on app open when farmer is set and online (silent background).
+   */
+  useEffect(() => {
+    if (state.farmerId && state.isOnline) {
+      apiClient.prefetchAll(state.farmerId).catch(() => {});
+    }
+  }, [state.farmerId, state.isOnline]);
+
+  /**
    * Health check backend once when app becomes ready (after settings load)
    */
   useEffect(() => {

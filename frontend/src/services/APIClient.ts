@@ -6,9 +6,16 @@ import type {
   MarketPricesResponse,
   GovtSchemesResponse,
 } from '../types';
+import { dbRepository } from './DBRepository';
 import {
   API_BASE_URL,
   API_ENDPOINTS,
+  getTranscribeStreamWsUrl,
+  PREFETCH_KEYS,
+  PREFETCH_TTL_CROP_MS,
+  PREFETCH_TTL_GOVT_MS,
+  PREFETCH_TTL_MARKET_MS,
+  PREFETCH_TTL_SOIL_MS,
   MAX_RETRY_ATTEMPTS,
   RETRY_DELAY_MS,
   RETRY_BACKOFF_MULTIPLIER,
@@ -96,27 +103,128 @@ export class APIClient {
 
   /**
    * Send chat message to backend (includes farmer_id so agent can use it for soil/crop etc.)
-   * Pass farmerIdOverride to ensure farmer_id is sent for this request (e.g. schemes flow).
-   * Pass options.signal to allow aborting the request (e.g. voice orb cancel).
+   * Backend returns SSE stream; this method consumes the stream and returns the full response.
+   * Pass cachedPrefetch from getPrefetchData() so the agent can use cached data and skip Lambda calls.
    */
   async sendChatMessage(
     message: string,
     sessionId?: string,
     farmerIdOverride?: string,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; cachedPrefetch?: Record<string, unknown> }
+  ): Promise<ChatResponse> {
+    return this.sendChatMessageStream(message, sessionId, farmerIdOverride, {
+      ...options,
+      onChunk: () => {},
+    });
+  }
+
+  /**
+   * Send chat message and stream response via SSE. Calls onChunk(delta) for each token; returns full ChatResponse when done.
+   */
+  async sendChatMessageStream(
+    message: string,
+    sessionId?: string,
+    farmerIdOverride?: string,
+    options?: {
+      signal?: AbortSignal;
+      cachedPrefetch?: Record<string, unknown>;
+      onChunk: (delta: string) => void;
+    }
   ): Promise<ChatResponse> {
     const request: ChatRequest = {
       message,
       session_id: sessionId || this.sessionId,
       farmer_id: farmerIdOverride ?? this.farmerId,
+      cached_prefetch: options?.cachedPrefetch,
     };
-
     const url = `${this.baseURL}${API_ENDPOINTS.CHAT}`;
-    return this.fetchWithRetry<ChatResponse>(url, {
+    const controller = new AbortController();
+    if (options?.signal) options.signal.addEventListener('abort', () => controller.abort());
+    const res = await fetch(url, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
-      signal: options?.signal,
+      signal: controller.signal,
     });
+    if (!res.ok) throw new Error(`Chat failed: ${res.status} ${res.statusText}`);
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    const decoder = new TextDecoder();
+    let full = '';
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const payload = line.slice(6);
+            if (payload === '[DONE]' || payload === '') continue;
+            try {
+              const obj = JSON.parse(payload) as { delta?: string };
+              if (typeof obj.delta === 'string') {
+                full += obj.delta;
+                options?.onChunk(obj.delta);
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return {
+      response: full,
+      session_id: request.session_id ?? this.sessionId,
+      message: request.message ?? message,
+    };
+  }
+
+  /**
+   * Get valid prefetch cache for /chat (non-expired slots only). Pass to sendChatMessage/sendChatMessageStream as cachedPrefetch.
+   */
+  async getPrefetchData(): Promise<Record<string, unknown>> {
+    return dbRepository.getValidPrefetch();
+  }
+
+  /**
+   * Pre-fetch soil, crop, market, govt data and cache in IndexedDB with TTL. Call on app open when farmerId is set.
+   */
+  async prefetchAll(farmerId: string): Promise<void> {
+    const id = farmerId?.trim();
+    if (!id) return;
+    const now = Date.now();
+    const soilExpiry = now + PREFETCH_TTL_SOIL_MS;
+    const cropExpiry = now + PREFETCH_TTL_CROP_MS;
+    const marketExpiry = now + PREFETCH_TTL_MARKET_MS;
+    const govtExpiry = now + PREFETCH_TTL_GOVT_MS;
+
+    const [soil, crop, market, govt] = await Promise.allSettled([
+      this.getSoilMoisture(id).catch(() => null),
+      this.getCropAdvice(id).catch(() => null),
+      this.getMarketPrices().catch(() => null),
+      this.getGovtSchemes(id).catch(() => null),
+    ]);
+
+    await Promise.all([
+      soil.status === 'fulfilled' && soil.value != null
+        ? dbRepository.setPrefetchSlot(PREFETCH_KEYS.SOIL_MOISTURE, soil.value, soilExpiry)
+        : Promise.resolve(),
+      crop.status === 'fulfilled' && crop.value != null
+        ? dbRepository.setPrefetchSlot(PREFETCH_KEYS.CROP_ADVICE, crop.value, cropExpiry)
+        : Promise.resolve(),
+      market.status === 'fulfilled' && market.value != null
+        ? dbRepository.setPrefetchSlot(PREFETCH_KEYS.MARKET_PRICES, market.value, marketExpiry)
+        : Promise.resolve(),
+      govt.status === 'fulfilled' && govt.value != null
+        ? dbRepository.setPrefetchSlot(PREFETCH_KEYS.GOVT_SCHEMES, govt.value, govtExpiry)
+        : Promise.resolve(),
+    ]);
   }
 
   /**
@@ -257,6 +365,61 @@ export class APIClient {
   async healthCheck(): Promise<{ status: string; service: string }> {
     const url = `${this.baseURL}${API_ENDPOINTS.HEALTH}`;
     return this.fetchWithRetry(url);
+  }
+
+  /**
+   * Open a streaming transcription WebSocket. Send PCM chunks (16-bit, 16 kHz mono) via sendChunk.
+   * Caller must send "end" (text message) or close the socket when done to get final transcript.
+   * @param languageCode - 'hi-IN' or 'en-IN'
+   * @param options.signal - Optional AbortSignal; closing the socket when aborted.
+   */
+  openTranscribeStream(
+    languageCode: string,
+    options?: { signal?: AbortSignal; sampleRate?: number }
+  ): Promise<{
+    ws: WebSocket;
+    sendChunk: (chunk: ArrayBuffer) => void;
+    onTranscript: (cb: (event: { type: 'partial' | 'final'; transcript: string }) => void) => void;
+    sendEnd: () => void;
+  }> {
+    const sampleRate = options?.sampleRate ?? 16000;
+    const url = `${getTranscribeStreamWsUrl()}?language_code=${encodeURIComponent(languageCode)}&sample_rate=${sampleRate}`;
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(url);
+      let transcriptCb: (event: { type: 'partial' | 'final'; transcript: string }) => void = () => {};
+
+      ws.binaryType = 'arraybuffer';
+      ws.onopen = () => {
+        if (options?.signal?.aborted) {
+          ws.close();
+          return;
+        }
+        options?.signal?.addEventListener('abort', () => ws.close());
+        resolve({
+          ws,
+          sendChunk: (chunk: ArrayBuffer) => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
+          },
+          onTranscript: (cb) => {
+            transcriptCb = cb;
+          },
+          sendEnd: () => {
+            if (ws.readyState === WebSocket.OPEN) ws.send('end');
+          },
+        });
+      };
+      ws.onmessage = (event) => {
+        try {
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : null;
+          if (data && typeof data.type === 'string' && typeof data.transcript === 'string')
+            transcriptCb({ type: data.type as 'partial' | 'final', transcript: data.transcript });
+        } catch {
+          // ignore non-JSON
+        }
+      };
+      ws.onerror = () => reject(new Error('Transcribe stream failed'));
+      ws.onclose = () => {};
+    });
   }
 
   /**
