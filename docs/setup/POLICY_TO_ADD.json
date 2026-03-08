@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction"
+      ],
+      "Resource": [
+        "arn:aws:lambda:ap-south-1:288761728613:function:get-soil-moisture",
+        "arn:aws:lambda:ap-south-1:288761728613:function:get-crop-advice",
+        "arn:aws:lambda:ap-south-1:288761728613:function:get-market-prices"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:GetInferenceProfile",
+        "bedrock:ListInferenceProfiles"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/*",
+        "arn:aws:bedrock:ap-south-1:288761728613:inference-profile/*",
+        "arn:aws:bedrock:ap-south-1::inference-profile/*"
+      ]
+    }
+  ]
+}

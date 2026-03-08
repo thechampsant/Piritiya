@@ -1,0 +1,200 @@
+Build a React PWA called Piritiya — a voice-first farming assistant for farmers in Uttar Pradesh, India.
+
+I have already provided the design system in a folder called piritiya-design-system/ which lives outside the frontend folder. Use relative paths to import from it. Use piritiya-design-system/DESIGN_SYSTEM.md as your complete reference. Do not invent new styles, colors, or components — everything you need is already defined.
+
+Import paths:
+
+import { colors, typography, spacing, radii, shadows, animation, zIndex, googleFontsUrl } from '../piritiya-design-system/src/tokens';
+import { LANGUAGES, getTranslation, toLocalNum } from '../piritiya-design-system/src/tokens/i18n';
+import { Mic, Send, Wheat, Leaf, CloudRain, TrendingUp, Bug, WifiOff, RefreshCw, Clock, AlertTriangle, Settings, Compass, BookOpen, FileText, ArrowRight, ChevronLeft, ChevronRight, Check, X, Search, RotateCcw, Sparkles, PiritiyaMark, Beetle } from '../piritiya-design-system/src/icons';
+import { VoiceOrb, ToggleSwitch, PillChip, FrostedCard, AmbientBg, SettingRow, SettingSection, LangToggle, StatusPill, SoilGauge, AWSBadge, TeamBadge, globalStyles } from '../piritiya-design-system/src/components';
+
+If the bundler blocks imports outside src/, add this alias to vite.config.js:
+
+resolve: {
+  alias: { '@ds': path.resolve(__dirname, '../piritiya-design-system/src') }
+}
+
+Then import as: import { colors } from '@ds/tokens'
+
+---
+
+Project structure to create:
+
+frontend/
+  src/
+    screens/
+      OnboardScreen.jsx
+      HomeScreen.jsx
+      ChatScreen.jsx
+      ExploreScreen.jsx
+      SettingsScreen.jsx
+    App.jsx
+
+---
+
+App shell — src/App.jsx:
+- Max width 390px, centered, 100dvh height
+- Background: linear-gradient(160deg, #f5f0e8 0%, #eef4ee 50%, #f8f8f6 100%)
+- Font: DM Sans (body), Lora (headings/serif)
+- Inject globalStyles from components at root
+- Load Google Fonts from googleFontsUrl token
+- Hold all global state here and pass down as props
+- Handle screen routing: "onboard" | "home" | "chat" | "explore" | "settings"
+
+---
+
+Screens to build:
+
+1. OnboardScreen.jsx
+- PiritiyaMark logo (36px, #138808)
+- Headline in Lora serif: use t.onboardTitle
+- Farmer ID input — white background, dark border, #1a2010 text
+- Get Started button — solid #138808 green, white text
+- Skip link below button
+- LangToggle centered at bottom
+- TeamBadge + divider + AWSBadge below LangToggle
+
+2. HomeScreen.jsx
+- AmbientBg behind everything
+- Header: PiritiyaMark (22px) + app name left, LangToggle right
+- StatusPill (online/offline) below header
+- Rotating editorial prompts — 5 prompts, swap every 5.5s with fadeUp animation, ArrowRight button to send prompt as chat message
+- Quick action pill chips: soil moisture / crop advice / market prices / weather — horizontal scroll row, tapping sends as chat message
+- VoiceOrb centered (72px), listening state with ripple rings
+- "Listening..." text pulses below orb when active
+- Voice / Type mode switcher pills below orb
+- Type mode: text input + Send button in pill container
+
+3. ChatScreen.jsx
+- Header: ChevronLeft back button, PiritiyaMark (18px), LangToggle, X + new chat button
+- Scrollable message thread, auto-scroll to latest
+- User bubbles: right-aligned, #138808 background, white text, borderRadius "20px 20px 4px 20px"
+- Bot bubbles: left-aligned, FrostedCard, Lora serif text, borderRadius "20px 20px 20px 4px"
+- Bot response cards: SoilGauge, CropCard (crop name + score bar + icon), MarketCard (table with TrendingUp/down)
+- Loading indicator: 3 pulsing dots
+- InputBar at bottom — same voice/type switcher as HomeScreen
+- Archive badge on cached responses, WifiOff badge on offline responses
+
+4. ExploreScreen.jsx
+- Distinct header — solid background rgba(255,255,255,0.6) with blur
+- Title "Explore" + subtitle in Lora
+- Category filter chips: All / Soil / Crops / Market / Weather / Pests — active chip is #138808 green
+- Featured article: large card with coloured left border, tag badge, icon, title in Lora, body text, Read More button
+- Compact article list: icon square + title + tag + ChevronRight — tapping any article fires it as a chat query and navigates to chat
+- Empty state: Search icon + message
+
+5. SettingsScreen.jsx
+- ChevronLeft back, "Settings" title in Lora, LangToggle
+- SettingSection + SettingRow for each group:
+  - Farmer ID: text input + green Save button
+  - Language: LangToggle (opens LangSheet)
+  - Voice Input: ToggleSwitch
+  - Voice Output: ToggleSwitch
+  - Storage used + Version 1.0.0
+- Danger zone SettingSection (red tint): Clear Cache / Clear All Data / Reset App
+- Confirm modal with blurred backdrop on destructive actions
+- TeamBadge + AWSBadge credits footer
+
+---
+
+Bottom navigation (hidden on onboard screen):
+- 4 tabs: Today (Wheat), Explore (Compass), Entries (BookOpen), Settings (Settings icon)
+- Active: #138808 icon + label color
+- Inactive: rgba(20,30,16,0.4)
+- Background: rgba(255,255,255,0.85), backdropFilter blur(24px), top border rgba(0,0,0,0.07)
+- Home indicator bar at bottom center
+
+---
+
+LangSheet bottom sheet:
+- Triggered by any LangToggle tap
+- Slides up with slideUp animation (cubic-bezier(0.32,0.72,0,1))
+- Blurred dark backdrop, tap to dismiss
+- 2-column grid of language tiles
+- Each tile: script name large + roman name small + Instant badge (hi/en) or Slower badge (others)
+- Selected tile: green border + green script text + Check icon
+- Selecting a batch language (non hi/en): show 4-second warning toast
+
+---
+
+Language system:
+- Default language: "hi" (Hindi)
+- Use getTranslation(lang) for all UI strings — never hardcode English text
+- Use toLocalNum(n, lang) for all numbers displayed in UI
+- 8 supported languages: hi, en, bn, gu, kn, ml, ta, te
+- Non-hi/en falls back to English UI strings until full translations added
+
+---
+
+Voice orb behaviour:
+- Idle: tricolour gradient (saffron top, white mid, green bottom), 4s slow pulse, navy #000080 mic icon at 80% opacity
+- Tap to listen: ripple rings animate outward, mic fades out, "Listening..." text pulses below
+- After 2.6s: pick a random sample query, navigate to chat screen, send as message
+- 20% chance of failure: show yellow voice error toast with fallback to type mode
+- Voice disabled in settings: tap shows error toast immediately
+
+---
+
+Chat bot response types:
+
+{ type: "soil",   moisture: 65, status: 2 }
+{ type: "crops",  crops: [{ name, nameHi, score, Icon }] }
+{ type: "market", prices: [{ crop, cropHi, price, change }], market: "Lucknow Mandi" }
+{ type: "text",   text: "..." }
+
+status values: 0=dry, 1=low, 2=optimal, 3=waterlogged
+
+---
+
+Key state in App.jsx:
+
+const [screen, setScreen] = useState("onboard");
+const [lang, setLang] = useState("hi");
+const [showLangSheet, setShowLangSheet] = useState(false);
+const [inputMode, setInputMode] = useState("voice");
+const [isOnline, setIsOnline] = useState(true);
+const [isSyncing, setIsSyncing] = useState(false);
+const [pendingCount, setPendingCount] = useState(0);
+const [failedSyncCount, setFailedSyncCount] = useState(0);
+const [isListening, setIsListening] = useState(false);
+const [isSpeaking, setIsSpeaking] = useState(false);
+const [voiceError, setVoiceError] = useState(false);
+const [voiceInEnabled, setVoiceInEnabled] = useState(true);
+const [voiceOutEnabled, setVoiceOutEnabled] = useState(true);
+const [messages, setMessages] = useState([]);
+const [isLoading, setIsLoading] = useState(false);
+const [inputText, setInputText] = useState("");
+const [farmerId, setFarmerId] = useState("");
+const [farmerIdInput, setFarmerIdInput] = useState("");
+const [farmerIdEdit, setFarmerIdEdit] = useState("");
+const [sessionRestored, setSessionRestored] = useState(false);
+const [exploreCategory, setExploreCategory] = useState(0);
+const [activeNav, setActiveNav] = useState("today");
+const [showConfirmClear, setShowConfirmClear] = useState(false);
+
+---
+
+Strict design rules — never break these:
+- All text: #1a2010 or rgba(20,30,16,x) — never white text on the light background
+- Primary action color: #138808 (India flag green)
+- Card surfaces: rgba(255,255,255,0.75), border 1px solid rgba(0,0,0,0.07), shadow 0 2px 12px rgba(0,0,0,0.06)
+- Border radius: cards 20px, pills 100px, small 8–12px
+- All tappable elements: minHeight 44px
+- No emoji anywhere — only icons from piritiya-design-system/src/icons
+- AmbientBg on every screen at zIndex 0
+- Animations use keyframes from animation.keyframes — inject once at app root via globalStyles
+- Inputs: background rgba(0,0,0,0.06), border rgba(0,0,0,0.12), text #1a2010
+
+---
+
+AWS integration (mock data for now, structure for real):
+- Amazon Transcribe: voice-to-text (real-time hi/en, batch for bn/gu/kn/ml/ta/te)
+- Amazon Polly: text-to-speech (Kajal Neural for Hindi, Aditi for English)
+- Amazon Bedrock Claude: chat responses
+- Amazon Translate: message translation
+- IndexedDB via idb library: offline message queue
+
+---
+
+Build App.jsx first with all state and routing, then each screen file in order: Onboard, Home, Chat, Explore, Settings. Reference piritiya-design-system/DESIGN_SYSTEM.md for any component API details.

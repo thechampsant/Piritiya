@@ -1,0 +1,195 @@
+{
+  "metadata": {
+    "dataset_version": "1.0",
+    "last_updated": "2026-02-28T06:00:00Z",
+    "resolution_meters": 100,
+    "coverage_area": "Uttar Pradesh",
+    "data_source": "NISAR Satellite (Mock)",
+    "update_frequency": "daily"
+  },
+  "farmers": [
+    {
+      "farmer_id": "UP-LUCKNOW-MALIHABAD-00001",
+      "farmer_name": "राम प्रसाद वर्मा",
+      "location": {
+        "state": "Uttar Pradesh",
+        "district": "Lucknow",
+        "block": "Malihabad",
+        "village": "Nagram",
+        "coordinates": {
+          "latitude": 26.9124,
+          "longitude": 80.9466
+        }
+      },
+      "land_details": {
+        "total_area_hectares": 2.5,
+        "soil_type": "Loamy",
+        "irrigation_source": "Tubewell"
+      },
+      "phone_number": "+919876543210",
+      "preferred_language": "hindi",
+      "registration_date": "2025-01-15T00:00:00Z",
+      "nisar_data": {
+        "moisture_index": 35,
+        "measurement_date": "2026-02-27T10:30:00Z",
+        "moisture_category": "Low",
+        "trend": "Decreasing"
+      },
+      "groundwater_status": {
+        "status": "Critical",
+        "depth_meters": 45.2,
+        "depletion_rate_cm_per_year": 1.8,
+        "safe_extraction_limit_cubic_meters": 5000
+      },
+      "recommended_crops": [
+        {
+          "crop_name": "Moong (Green Gram)",
+          "crop_name_hindi": "मूंग",
+          "water_requirement_mm": 350,
+          "duration_days": 60,
+          "expected_yield_quintal_per_hectare": 8,
+          "market_price_per_quintal": 7500,
+          "sustainability_score": 92,
+          "reason": "Low water requirement, nitrogen-fixing, suitable for summer"
+        },
+        {
+          "crop_name": "Urad (Black Gram)",
+          "crop_name_hindi": "उड़द",
+          "water_requirement_mm": 400,
+          "duration_days": 70,
+          "expected_yield_quintal_per_hectare": 10,
+          "market_price_per_quintal": 8200,
+          "sustainability_score": 88,
+          "reason": "Moderate water need, improves soil health"
+        }
+      ],
+      "crops_to_avoid": [
+        {
+          "crop_name": "Summer Rice (Satha Dhan)",
+          "crop_name_hindi": "गर्मी का धान",
+          "water_requirement_mm": 1200,
+          "reason": "Extremely high water requirement, will deplete groundwater critically",
+          "estimated_groundwater_depletion_meters": 3.5
+        }
+      ],
+      "current_season": "Zaid (Summer)",
+      "last_consultation_date": "2026-02-25T14:20:00Z"
+    },
+    {
+      "farmer_id": "UP-KANPUR-GHATAMPUR-00002",
+      "farmer_name": "श्याम सिंह यादव",
+      "location": {
+        "state": "Uttar Pradesh",
+        "district": "Kanpur",
+        "block": "Ghatampur",
+        "village": "Rura",
+        "coordinates": {
+          "latitude": 26.1542,
+          "longitude": 80.1678
+        }
+      },
+      "land_details": {
+        "total_area_hectares": 3.0,
+        "soil_type": "Clay",
+        "irrigation_source": "Canal"
+      },
+      "phone_number": "+919876543211",
+      "preferred_language": "hindi",
+      "registration_date": "2025-02-10T00:00:00Z",
+      "nisar_data": {
+        "moisture_index": 52,
+        "measurement_date": "2026-02-27T10:30:00Z",
+        "moisture_category": "Moderate",
+        "trend": "Stable"
+      },
+      "groundwater_status": {
+        "status": "Moderate",
+        "depth_meters": 28.5,
+        "depletion_rate_cm_per_year": 0.8,
+        "safe_extraction_limit_cubic_meters": 12000
+      },
+      "recommended_crops": [
+        {
+          "crop_name": "Wheat",
+          "crop_name_hindi": "गेहूं",
+          "water_requirement_mm": 450,
+          "duration_days": 120,
+          "expected_yield_quintal_per_hectare": 45,
+          "market_price_per_quintal": 2100,
+          "sustainability_score": 75,
+          "reason": "Moderate water requirement, good market demand"
+        },
+        {
+          "crop_name": "Mustard",
+          "crop_name_hindi": "सरसों",
+          "water_requirement_mm": 350,
+          "duration_days": 90,
+          "expected_yield_quintal_per_hectare": 15,
+          "market_price_per_quintal": 5500,
+          "sustainability_score": 82,
+          "reason": "Low water requirement, oil seed crop"
+        }
+      ],
+      "crops_to_avoid": [],
+      "current_season": "Rabi",
+      "last_consultation_date": "2026-02-20T09:15:00Z"
+    },
+    {
+      "farmer_id": "UP-VARANASI-PINDRA-00003",
+      "farmer_name": "राजेश कुमार पांडे",
+      "location": {
+        "state": "Uttar Pradesh",
+        "district": "Varanasi",
+        "block": "Pindra",
+        "village": "Newada",
+        "coordinates": {
+          "latitude": 25.3176,
+          "longitude": 82.9739
+        }
+      },
+      "land_details": {
+        "total_area_hectares": 1.8,
+        "soil_type": "Sandy Loam",
+        "irrigation_source": "Tubewell"
+      },
+      "phone_number": "+919876543212",
+      "preferred_language": "hindi",
+      "registration_date": "2025-03-05T00:00:00Z",
+      "nisar_data": {
+        "moisture_index": 28,
+        "measurement_date": "2026-02-27T10:30:00Z",
+        "moisture_category": "Low",
+        "trend": "Decreasing"
+      },
+      "groundwater_status": {
+        "status": "Critical",
+        "depth_meters": 52.8,
+        "depletion_rate_cm_per_year": 2.1,
+        "safe_extraction_limit_cubic_meters": 4000
+      },
+      "recommended_crops": [
+        {
+          "crop_name": "Arhar (Pigeon Pea)",
+          "crop_name_hindi": "अरहर",
+          "water_requirement_mm": 500,
+          "duration_days": 150,
+          "expected_yield_quintal_per_hectare": 12,
+          "market_price_per_quintal": 6800,
+          "sustainability_score": 85,
+          "reason": "Drought tolerant, nitrogen-fixing"
+        }
+      ],
+      "crops_to_avoid": [
+        {
+          "crop_name": "Sugarcane",
+          "crop_name_hindi": "गन्ना",
+          "water_requirement_mm": 2000,
+          "reason": "Very high water requirement, unsuitable for critical groundwater areas",
+          "estimated_groundwater_depletion_meters": 5.2
+        }
+      ],
+      "current_season": "Zaid (Summer)",
+      "last_consultation_date": "2026-02-26T11:30:00Z"
+    }
+  ]
+}
