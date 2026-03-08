@@ -7,16 +7,18 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { registerSW } from 'virtual:pwa-register'
 import { globalStyles, googleFontsUrl } from '@ds/tokens'
 
-// Inject global styles from design system
-const styleEl = document.createElement('style');
-styleEl.textContent = globalStyles;
-document.head.appendChild(styleEl);
-
-// Load Google Fonts from design system
-const linkEl = document.createElement('link');
-linkEl.rel = 'stylesheet';
-linkEl.href = googleFontsUrl;
-document.head.appendChild(linkEl);
+// Inject global styles from design system (guard against missing exports on reload)
+if (typeof globalStyles === 'string') {
+  const styleEl = document.createElement('style');
+  styleEl.textContent = globalStyles;
+  document.head.appendChild(styleEl);
+}
+if (typeof googleFontsUrl === 'string') {
+  const linkEl = document.createElement('link');
+  linkEl.rel = 'stylesheet';
+  linkEl.href = googleFontsUrl;
+  document.head.appendChild(linkEl);
+}
 
 // Register service worker
 const updateSW = registerSW({

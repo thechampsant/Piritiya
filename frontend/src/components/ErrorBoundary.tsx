@@ -33,11 +33,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error without PII
-    ErrorLogger.log('unknown', error, {
-      componentStack: errorInfo.componentStack,
-    });
-
+    try {
+      ErrorLogger.log('unknown', error, {
+        componentStack: errorInfo.componentStack,
+      });
+    } catch (logErr) {
+      // Ensure logging never throws
+    }
     console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
@@ -55,7 +57,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         return this.props.fallback;
       }
 
-      // Default fallback UI
+      // Default fallback UI (show actual error in dev for debugging)
+      const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
+      const err = this.state.error;
       return (
         <div className="min-h-screen bg-gradient-to-b from-soil-dark to-soil flex items-center justify-center p-4">
           <div className="bg-cream/5 border border-alert/40 rounded-lg p-6 max-w-md w-full">
@@ -68,6 +72,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="text-cream/70 text-sm mb-4 text-center">
               कुछ गलत हो गया
             </p>
+            {isDev && err && (
+              <pre className="text-left text-xs text-red-200 bg-black/30 p-3 rounded mb-4 overflow-auto max-h-32">
+                {String(err.message || 'Unknown error')}
+                {err.stack != null ? `\n\n${String(err.stack)}` : ''}
+              </pre>
+            )}
             <p className="text-cream/60 text-xs mb-6 text-center">
               The app encountered an unexpected error. Please try refreshing the page.
             </p>

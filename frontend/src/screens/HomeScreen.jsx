@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { VoiceOrb, PillChip, AmbientBg } from '@ds/components';
+import { VoiceOrb, AmbientBg, PillChip } from '@ds/components';
 import { colors, spacing, typography, radii, animation } from '@ds/tokens';
 import { PiritiyaMark } from '@ds/icons';
 import { getTranslation } from '../utils/i18n';
@@ -24,6 +24,25 @@ import { playVoiceBeep } from '../utils/voiceSounds';
  * Requirements: 26.1, 26.2, 26.3, 26.4, 26.5, 26.6
  */
 const OPEN_SESSION_KEY = 'piritiya_open_session_id';
+
+/** Topic emoji for conversation card: crop → 🌾, market → 💰, soil → 🌱, weather → ☁️, else 💬 */
+function getTopicEmoji(text) {
+  if (!text || typeof text !== 'string') return '💬';
+  const t = text.toLowerCase().trim();
+  // Hindi: फसल, बाजार, मिट्टी/भूजल, मौसम
+  if (/\b(crop|crops|plant|planting|फसल|बोएं|बोई|फसलें)\b/.test(t) || /\b(wheat|rice|गेहूं|धान)\b/.test(t)) return '🌾';
+  if (/\b(market|price|prices|भाव|बाजार|मंडी)\b/.test(t)) return '💰';
+  if (/\b(soil|moisture|भूजल|मिट्टी|जल स्तर|groundwater)\b/.test(t)) return '🌱';
+  if (/\b(weather|rain|मौसम|बारिश|बरसात)\b/.test(t)) return '☁️';
+  return '💬';
+}
+
+/** First 5–6 words for response preview subtitle */
+function getPreviewWords(str, maxWords = 6) {
+  if (!str || typeof str !== 'string') return '';
+  const words = str.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, maxWords).join(' ') + (words.length > maxWords ? '…' : '');
+}
 
 const HomeScreen = ({ onNavigate }) => {
   const { state: appState, setLanguage, getQueryHistory, clearQueryHistory } = useApp();
@@ -67,6 +86,7 @@ const HomeScreen = ({ onNavigate }) => {
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [advisoryError, setAdvisoryError] = useState(null);
   const [showAnswerReady, setShowAnswerReady] = useState(false);
+  const [pressedCardIndex, setPressedCardIndex] = useState(null);
 
   const prompts = language === 'hi'
     ? [
@@ -99,9 +119,14 @@ const HomeScreen = ({ onNavigate }) => {
     return () => clearInterval(interval);
   }, [prompts.length]);
 
+  /** Load past conversations for the current farmer only; refresh when farmer or history changes. */
   useEffect(() => {
-    setQueryHistory(getQueryHistory?.() ?? []);
-  }, [getQueryHistory]);
+    try {
+      setQueryHistory(typeof getQueryHistory === 'function' ? (getQueryHistory() ?? []) : []);
+    } catch (_) {
+      setQueryHistory([]);
+    }
+  }, [getQueryHistory, appState.farmerId]);
 
   /** Fetch farmer name and location for greeting and header when farmerId is set. */
   useEffect(() => {
@@ -499,7 +524,7 @@ const HomeScreen = ({ onNavigate }) => {
           ))}
         </div>
 
-        {/* History of past conversation queries as pill chips */}
+        {/* Past conversations — full-width cards */}
         <div
           style={{
             flex: 1,
@@ -507,7 +532,7 @@ const HomeScreen = ({ onNavigate }) => {
             overflow: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            padding: `0 ${spacing['5']} ${spacing['4']}`,
+            padding: `0 ${spacing['5']} 120px`,
             position: 'relative',
             zIndex: 2,
           }}
@@ -561,91 +586,169 @@ const HomeScreen = ({ onNavigate }) => {
               <div
                 style={{
                   display: 'flex',
-                  flexWrap: 'wrap',
+                  flexDirection: 'column',
                   gap: '10px',
-                  alignContent: 'flex-start',
                 }}
               >
-                {queryHistory.map((item, i) => (
-                  <div
-                    key={`${i}-${item.timestamp}-${(item.text || '').slice(0, 15)}`}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      gap: '2px',
-                    }}
-                  >
-                    <PillChip
-                      label={(item.text || '').length > 40 ? `${(item.text || '').slice(0, 40)}…` : (item.text || '')}
-                      onPress={() => handlePastConversationPress(item)}
-                    />
-                    <span
+                {queryHistory.map((item, i) => {
+                  const safeItem = item && typeof item === 'object' ? item : { text: '', timestamp: Date.now() };
+                  const isPressed = pressedCardIndex === i;
+                  const subtitle = safeItem.responsePreview
+                    ? getPreviewWords(safeItem.responsePreview, 6)
+                    : (language === 'hi' ? 'देखने के लिए टैप करें' : 'Tap to view');
+                  return (
+                    <button
+                      key={`${i}-${safeItem.timestamp}-${(safeItem.text || '').slice(0, 15)}`}
+                      type="button"
+                      onClick={() => handlePastConversationPress(safeItem)}
+                      onTouchStart={() => setPressedCardIndex(i)}
+                      onTouchEnd={() => setPressedCardIndex(null)}
+                      onMouseDown={() => setPressedCardIndex(i)}
+                      onMouseUp={() => setPressedCardIndex(null)}
+                      onMouseLeave={() => setPressedCardIndex(null)}
                       style={{
-                        fontFamily: typography.fonts.sans,
-                        fontSize: '10px',
-                        color: colors.text.tertiary || 'rgba(20,30,16,0.45)',
-                        paddingLeft: '4px',
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '14px 14px 14px 16px',
+                        background: '#fff',
+                        borderRadius: 16,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                        border: 'none',
+                        borderLeft: isPressed ? `3px solid ${colors?.green?.default || '#16a34a'}` : '3px solid transparent',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transform: isPressed ? 'scale(0.98)' : 'scale(1)',
+                        transition: 'transform 0.1s ease, border-left-color 0.1s ease',
                       }}
                     >
-                      {formatHistoryDate(item.timestamp)}
-                    </span>
-                  </div>
-                ))}
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          background: colors?.green?.default ? `${colors.green.default}20` : 'rgba(22,163,74,0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '14px',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {getTopicEmoji(safeItem.text)}
+                      </div>
+                      <div
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          <span
+                            style={{
+                              fontFamily: typography?.fonts?.sans || 'system-ui, sans-serif',
+                              fontWeight: 600,
+                              fontSize: typography?.size?.sm || 14,
+                              color: colors?.text?.primary || '#141e10',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            {safeItem.text || ''}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: typography?.fonts?.sans || 'system-ui, sans-serif',
+                              fontSize: '10px',
+                              color: colors?.text?.tertiary || 'rgba(20,30,16,0.45)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {formatHistoryDate(typeof safeItem.timestamp === 'number' ? safeItem.timestamp : Date.now())}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontFamily: typography?.fonts?.sans || 'system-ui, sans-serif',
+                            fontSize: typography?.size?.xs || 12,
+                            color: colors?.text?.tertiary || 'rgba(20,30,16,0.55)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {subtitle}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          color: colors?.text?.tertiary || 'rgba(20,30,16,0.4)',
+                          fontSize: 18,
+                          flexShrink: 0,
+                        }}
+                        aria-hidden
+                      >
+                        ›
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </>
           )}
         </div>
 
-        {/* Orb section: voice only at bottom (above nav) */}
-        <div
-          style={{
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            padding: `${spacing['4']} 0 ${spacing['4']}`,
-            position: 'relative',
-            zIndex: 2,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <VoiceOrb
-              size={72}
-              isListening={isListening}
-              isProcessing={isProcessing}
-              isError={!!voiceError}
-              onPress={handleVoiceOrbClick}
-              label={getTranslation('tapToSpeak', language)}
-            />
-          </div>
+      </div>
 
-          <VoiceFeedback
-            phase={
-              voiceError
-                ? 'error'
-                : showAnswerReady
-                  ? 'answerReady'
-                  : isProcessing
-                    ? 'processing'
-                    : isListening
-                      ? 'recording'
-                      : 'idle'
-            }
-            frequencyData={frequencyData}
-            recordingStartedAt={recordingStartedAt}
-            language={language}
-          />
-        </div>
+      {/* Voice-only input - fixed above bottom nav; no background (same as ChatScreen) */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '82px',
+          left: 0,
+          right: 0,
+          maxWidth: '390px',
+          margin: '0 auto',
+          padding: `${spacing['4']} 0 ${spacing['4']}`,
+          background: 'transparent',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px',
+        }}
+      >
+        <VoiceOrb
+          size={72}
+          isListening={isListening}
+          isProcessing={isProcessing}
+          isError={!!voiceError}
+          onPress={handleVoiceOrbClick}
+          label={getTranslation('tapToSpeak', language)}
+        />
+        <VoiceFeedback
+          phase={
+            voiceError
+              ? 'error'
+              : showAnswerReady
+                ? 'answerReady'
+                : isProcessing
+                  ? 'processing'
+                  : isListening
+                    ? 'recording'
+                    : 'idle'
+          }
+          frequencyData={frequencyData}
+          recordingStartedAt={recordingStartedAt}
+          language={language}
+        />
       </div>
 
       {/* Advisory data panel (soil / crop / market from REST API) */}

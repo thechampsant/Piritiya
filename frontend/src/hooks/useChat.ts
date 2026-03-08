@@ -21,6 +21,8 @@ import type { Message } from '../types';
 interface UseChatOptions {
   sessionId: string;
   farmerId: string;
+  /** Called with the first few words of the bot response to store as conversation card preview. */
+  onResponsePreview?: (responseText: string) => void;
 }
 
 interface UseChatReturn {
@@ -31,7 +33,7 @@ interface UseChatReturn {
   clearError: () => void;
 }
 
-export function useChat({ sessionId, farmerId }: UseChatOptions): UseChatReturn {
+export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +142,8 @@ export function useChat({ sessionId, farmerId }: UseChatOptions): UseChatReturn 
             setMessages((prev) => [...prev, botMessage]);
             await dbRepository.saveMessage(botMessage);
 
+            onResponsePreview?.(response.response);
+
             // Requirement 7.1: Cache response for offline access
             await cacheManager.cacheAPIResponse(text, response.response);
 
@@ -201,6 +205,7 @@ export function useChat({ sessionId, farmerId }: UseChatOptions): UseChatReturn 
 
             setMessages((prev) => [...prev, botMessage]);
             await dbRepository.saveMessage(botMessage);
+            onResponsePreview?.(cachedResponse);
           } else {
             // No cached response - queue for later
             userMessage.status = 'failed';

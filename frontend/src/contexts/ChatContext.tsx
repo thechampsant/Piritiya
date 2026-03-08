@@ -46,7 +46,7 @@ interface ChatProviderProps {
 }
 
 export function ChatProvider({ children, farmerId }: ChatProviderProps) {
-  const { addQueryToHistory } = useApp();
+  const { addQueryToHistory, updateLastQueryPreview } = useApp();
   const [sessionId, setSessionId] = useState<string>('');
   const [pendingQueries, setPendingQueries] = useState<PendingQuery[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -61,6 +61,7 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
   } = useChatHook({
     sessionId,
     farmerId,
+    onResponsePreview: (responseText) => updateLastQueryPreview(sessionId, responseText),
   });
 
   // Use offline sync hook
@@ -146,8 +147,8 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
         throw new Error('Session not initialized');
       }
 
-      await sendMessageHook(text);
       addQueryToHistory(text, sessionId);
+      await sendMessageHook(text);
 
       // Update pending queries after sending
       const queries = await dbRepository.getPendingQueries();
