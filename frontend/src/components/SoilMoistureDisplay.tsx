@@ -5,10 +5,22 @@ import { formatNumber, formatDateTime } from '../utils/i18n';
 import type { Language } from '../types';
 
 interface SoilMoistureDisplayProps {
-  moistureLevel: number; // Percentage (0-100)
-  timestamp: number;
+  moistureLevel?: number; // Percentage (0-100)
+  timestamp?: number;
   language: Language;
   trend?: string;
+  /** When API returns plain text (e.g. from agent), display this instead of the gauge */
+  responseText?: string;
+}
+
+function formatResponseLines(text: string): string[] {
+  if (!text || typeof text !== 'string') return [];
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed
+    .split(/(?<=[।.])\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 const STATUS_STYLES: Record<string, { labelKey: string; color: string; bgColor: string; borderColor: string }> = {
@@ -23,11 +35,57 @@ const STATUS_STYLES: Record<string, { labelKey: string; color: string; bgColor: 
  * Uses inline styles / design tokens for reliable rendering in bottom sheet.
  */
 const SoilMoistureDisplay: React.FC<SoilMoistureDisplayProps> = ({
-  moistureLevel,
-  timestamp,
+  moistureLevel = 0,
+  timestamp = Date.now(),
   language,
   trend,
+  responseText,
 }) => {
+  const hasResponseText = typeof responseText === 'string' && responseText.trim().length > 0;
+
+  if (hasResponseText) {
+    return (
+      <div
+        style={{
+          background: 'rgba(0,0,0,0.03)',
+          border: '1px solid rgba(0,0,0,0.08)',
+          borderRadius: radii.lg,
+          padding: spacing['4'],
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: spacing['4'] }}>
+          <span style={{ fontSize: '1.5rem' }} aria-hidden>💧</span>
+          <h3
+            style={{
+              fontFamily: typography.fonts.sans,
+              fontSize: typography.size.lg,
+              fontWeight: 600,
+              color: colors.text?.primary ?? '#1a2010',
+            }}
+          >
+            {getTranslation('soilMoisture', language)}
+          </h3>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: spacing['2'] }}>
+          {formatResponseLines(responseText).map((line, i) => (
+            <p
+              key={i}
+              style={{
+                fontFamily: typography.fonts.sans,
+                fontSize: typography.size.sm,
+                color: colors.text?.secondary ?? 'rgba(20,30,16,0.8)',
+                lineHeight: 1.5,
+                margin: 0,
+              }}
+            >
+              {line}
+            </p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const getStatus = () => {
     if (moistureLevel < 20) return STATUS_STYLES.critical;
     if (moistureLevel < 40) return STATUS_STYLES.low;

@@ -6,7 +6,7 @@ import { apiClient } from '../services/APIClient';
 import { getOrCreateSession, createNewSession } from '../utils/session';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useApp } from './AppContext';
-import type { Message, PendingQuery } from '../types';
+import type { Message, PendingQuery, ChatResponse } from '../types';
 
 /**
  * ChatContext - Chat session state provider
@@ -31,7 +31,7 @@ interface ChatState {
 
 interface ChatContextValue {
   state: ChatState;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string) => Promise<ChatResponse | undefined>;
   startNewSession: () => Promise<void>;
   openSession: (sessionId: string) => void;
   syncPendingQueries: () => Promise<void>;
@@ -148,11 +148,13 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
       }
 
       addQueryToHistory(text, sessionId);
-      await sendMessageHook(text);
+      const result = await sendMessageHook(text);
 
       // Update pending queries after sending
       const queries = await dbRepository.getPendingQueries();
       setPendingQueries(queries);
+
+      return result;
     },
     [sessionId, sendMessageHook, addQueryToHistory]
   );

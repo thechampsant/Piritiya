@@ -1,5 +1,4 @@
 import React from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
 import { formatNumber } from '../utils/i18n';
 import type { Language } from '../types';
 
@@ -11,8 +10,21 @@ interface CropRecommendation {
 }
 
 interface CropRecommendationListProps {
-  recommendations: CropRecommendation[];
+  recommendations?: CropRecommendation[];
+  /** When API returns plain text (e.g. from agent), display this instead of the list */
+  responseText?: string;
   language: Language;
+}
+
+/** Split text on sentence boundaries (. or ।) for readable line breaks */
+function formatResponseLines(text: string): string[] {
+  if (!text || typeof text !== 'string') return [];
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed
+    .split(/(?<=[।.])\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -20,11 +32,10 @@ interface CropRecommendationListProps {
  * Requirements: 11.2
  */
 const CropRecommendationList: React.FC<CropRecommendationListProps> = ({
-  recommendations,
+  recommendations = [],
+  responseText,
   language,
 }) => {
-  const { t } = useLanguage();
-
   // Get color based on suitability score
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-400';
@@ -44,19 +55,28 @@ const CropRecommendationList: React.FC<CropRecommendationListProps> = ({
   // Default crop icons
   const defaultIcons = ['🌾', '🌽', '🥔', '🥕', '🌱', '🍅', '🥬', '🫘'];
 
+  const hasResponseText = typeof responseText === 'string' && responseText.trim().length > 0;
+
   return (
     <div className="bg-cream/5 border border-gold/20 rounded-lg p-4">
-      {/* Header */}
-      <h3 className="text-lg font-semibold text-cream mb-4">
-        {t('cropRecommendations')}
-      </h3>
+      {/* Header: icon + label */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-2xl" aria-hidden>🌾</span>
+        <h3 className="text-lg font-semibold text-cream">
+          {language === 'hi' ? 'फसल सलाह' : 'Crop Advice'}
+        </h3>
+      </div>
 
-      {/* Recommendations List */}
-      {recommendations.length === 0 ? (
-        <p className="text-cream/60 text-center py-4">
-          {language === 'hi' ? 'कोई सिफारिश उपलब्ध नहीं है' : 'No recommendations available'}
-        </p>
-      ) : (
+      {/* When API returns plain text (response field), display it with line breaks */}
+      {hasResponseText ? (
+        <div className="space-y-2">
+          {formatResponseLines(responseText).map((line, i) => (
+            <p key={i} className="text-cream/90 text-sm leading-relaxed">
+              {line}
+            </p>
+          ))}
+        </div>
+      ) : recommendations.length > 0 ? (
         <div className="space-y-3">
           {recommendations.map((rec, index) => (
             <div
@@ -106,7 +126,7 @@ const CropRecommendationList: React.FC<CropRecommendationListProps> = ({
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

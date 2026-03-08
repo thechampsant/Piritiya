@@ -3,7 +3,7 @@ import { dbRepository } from '../services/DBRepository';
 import { cacheManager } from '../services/CacheManager';
 import { apiClient } from '../services/APIClient';
 import { generateSessionId, incrementSessionMessageCount } from '../utils/session';
-import type { Message } from '../types';
+import type { Message, ChatResponse } from '../types';
 
 /**
  * useChat - Custom hook for chat functionality
@@ -29,7 +29,7 @@ interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
   error: string | null;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string) => Promise<ChatResponse | undefined>;
   clearError: () => void;
 }
 
@@ -85,11 +85,11 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
     async (text: string) => {
       // Requirement 4.5: Prevent duplicate submissions
       if (isSubmittingRef.current || isLoading) {
-        return;
+        return undefined;
       }
 
       if (!text.trim()) {
-        return;
+        return undefined;
       }
 
       isSubmittingRef.current = true;
@@ -149,6 +149,7 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
 
             // Update session message count
             await incrementSessionMessageCount(sessionId);
+            return response;
           } catch (apiError) {
             // API call failed - queue for later sync
             // Requirement 16.1: Queue messages when offline or API fails
@@ -206,6 +207,7 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
             setMessages((prev) => [...prev, botMessage]);
             await dbRepository.saveMessage(botMessage);
             onResponsePreview?.(cachedResponse);
+            return { response: cachedResponse, session_id: sessionId, message: text };
           } else {
             // No cached response - queue for later
             userMessage.status = 'failed';
@@ -230,6 +232,7 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
             });
 
             setError('You are offline. Message will be sent when connection is restored.');
+            return undefined;
           }
         }
       } catch (err) {
@@ -243,6 +246,7 @@ export function useChat({ sessionId, farmerId, onResponsePreview }: UseChatOptio
         setIsLoading(false);
         isSubmittingRef.current = false;
       }
+      return undefined;
     },
     [sessionId, farmerId, isLoading]
   );

@@ -14,6 +14,18 @@ interface MarketPrice {
 interface MarketPriceTableProps {
   prices: MarketPrice[];
   language: Language;
+  /** When API returns plain text (e.g. from agent), display this instead of the table */
+  responseText?: string;
+}
+
+function formatResponseLines(text: string): string[] {
+  if (!text || typeof text !== 'string') return [];
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed
+    .split(/(?<=[।.])\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -23,18 +35,31 @@ interface MarketPriceTableProps {
 const MarketPriceTable: React.FC<MarketPriceTableProps> = ({
   prices,
   language,
+  responseText,
 }) => {
   const { t } = useLanguage();
+  const hasResponseText = typeof responseText === 'string' && responseText.trim().length > 0;
 
   return (
     <div className="bg-cream/5 border border-gold/20 rounded-lg p-4">
       {/* Header */}
-      <h3 className="text-lg font-semibold text-cream mb-4">
-        {t('marketPrices')}
-      </h3>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-2xl" aria-hidden>📊</span>
+        <h3 className="text-lg font-semibold text-cream">
+          {t('marketPrices')}
+        </h3>
+      </div>
 
-      {/* Table */}
-      {prices.length === 0 ? (
+      {/* When API returns plain text, display it with line breaks */}
+      {hasResponseText ? (
+        <div className="space-y-2">
+          {formatResponseLines(responseText).map((line, i) => (
+            <p key={i} className="text-cream/90 text-sm leading-relaxed">
+              {line}
+            </p>
+          ))}
+        </div>
+      ) : prices.length === 0 ? (
         <p className="text-cream/60 text-center py-4">
           {language === 'hi' ? 'कोई बाजार भाव उपलब्ध नहीं है' : 'No market prices available'}
         </p>

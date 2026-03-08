@@ -230,8 +230,16 @@ def get_crop_advice(request: CropAdviceRequest):
     payload = {'farmer_id': request.farmer_id}
     if request.soil_moisture:
         payload['soil_moisture'] = request.soil_moisture
-    
+
     result = invoke_lambda('get-crop-advice', payload)
+    if isinstance(result, dict) and result.get('statusCode') == 200 and 'body' in result:
+        return json.loads(result['body'])
+    if isinstance(result, dict) and result.get('statusCode') != 200 and 'body' in result:
+        try:
+            err = json.loads(result['body'])
+            raise HTTPException(status_code=result.get('statusCode', 500), detail=err.get('error', result['body']))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=result.get('statusCode', 500), detail=result['body'])
     return result
 
 @app.get("/market-prices")
@@ -242,8 +250,16 @@ def get_market_prices(crop: Optional[str] = None, district: Optional[str] = None
         payload['crop'] = crop
     if district:
         payload['district'] = district
-    
+
     result = invoke_lambda('get-market-prices', payload)
+    if isinstance(result, dict) and result.get('statusCode') == 200 and 'body' in result:
+        return json.loads(result['body'])
+    if isinstance(result, dict) and result.get('statusCode') != 200 and 'body' in result:
+        try:
+            err = json.loads(result['body'])
+            raise HTTPException(status_code=result.get('statusCode', 500), detail=err.get('error', result['body']))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=result.get('statusCode', 500), detail=result['body'])
     return result
 
 @app.get("/advice/{farmer_id}")

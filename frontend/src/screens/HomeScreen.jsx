@@ -215,29 +215,24 @@ const HomeScreen = ({ onNavigate }) => {
       setAdvisoryLoading(true);
       setAdvisoryError(null);
       try {
+        const chatResponse = await sendMessage(action.query);
+        const responseText = typeof chatResponse?.response === 'string' ? chatResponse.response : '';
         if (action.id === 'soil') {
-          const data = await apiClient.getSoilMoisture();
           setAdvisoryPanel({
             type: 'soil',
-            data: {
-              moistureLevel: data.moisture_index ?? 0,
-              timestamp: data.measurement_date ? new Date(data.measurement_date).getTime() : Date.now(),
-              trend: data.trend,
-            },
+            data: { responseText, moistureLevel: 0, timestamp: Date.now(), trend: '' },
           });
           showPanel = true;
         } else if (action.id === 'crops' || action.id === 'crop') {
-          const data = await apiClient.getCropAdvice();
           setAdvisoryPanel({
             type: 'crop',
-            data: { recommendations: data.recommended_crops || [] },
+            data: { responseText, recommendations: [] },
           });
           showPanel = true;
         } else if (action.id === 'market') {
-          const data = await apiClient.getMarketPrices();
           setAdvisoryPanel({
             type: 'market',
-            data: { prices: data.prices || [] },
+            data: { responseText, prices: [] },
           });
           showPanel = true;
         }
@@ -247,13 +242,14 @@ const HomeScreen = ({ onNavigate }) => {
       } finally {
         setAdvisoryLoading(false);
       }
-    }
-    try {
-      await sendMessage(action.query);
-      if (!showPanel && onNavigate) onNavigate('chat');
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      if (onNavigate) onNavigate('chat');
+    } else {
+      try {
+        await sendMessage(action.query);
+        if (onNavigate) onNavigate('chat');
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        if (onNavigate) onNavigate('chat');
+      }
     }
   };
 
@@ -823,11 +819,13 @@ const HomeScreen = ({ onNavigate }) => {
               moistureLevel={advisoryPanel.data.moistureLevel}
               timestamp={advisoryPanel.data.timestamp}
               trend={advisoryPanel.data.trend}
+              responseText={advisoryPanel.data.responseText}
               language={language}
             />
           )}
           {advisoryPanel && !advisoryLoading && (advisoryPanel.type === 'crop' || advisoryPanel.type === 'crops') && (
             <CropRecommendationList
+              responseText={advisoryPanel.data.responseText}
               recommendations={advisoryPanel.data.recommendations}
               language={language}
             />
@@ -835,6 +833,7 @@ const HomeScreen = ({ onNavigate }) => {
           {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'market' && (
             <MarketPriceTable
               prices={advisoryPanel.data.prices}
+              responseText={advisoryPanel.data.responseText}
               language={language}
             />
           )}

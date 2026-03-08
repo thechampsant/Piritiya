@@ -78,7 +78,8 @@ def lambda_handler(event, context):
         }
     }
     """
-    
+    print("get-crop-advice event:", json.dumps(event, default=str))
+
     try:
         # Extract parameters
         farmer_id = None
