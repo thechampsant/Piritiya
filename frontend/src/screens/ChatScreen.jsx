@@ -449,7 +449,7 @@ const ChatScreen = ({ onNavigate }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Voice-only input area - same VoiceOrb as Home screen, fixed above bottom navigation */}
+      {/* Voice-only input area - same VoiceOrb as Home screen, fixed above bottom navigation; no card */}
       <div
         style={{
           position: 'fixed',
@@ -458,16 +458,13 @@ const ChatScreen = ({ onNavigate }) => {
           right: 0,
           maxWidth: '390px',
           margin: '0 auto',
-          padding: '16px 16px 12px',
-          background: 'rgba(255,255,255,0.7)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(0,0,0,0.06)',
+          padding: `${spacing['4']} 0 ${spacing['4']}`,
+          background: 'transparent',
           zIndex: 10,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '12px',
+          gap: '16px',
         }}
       >
         <VoiceOrb

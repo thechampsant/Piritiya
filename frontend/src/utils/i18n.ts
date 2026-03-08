@@ -276,6 +276,96 @@ const translations = {
     hi: 'पिछली बातचीत हटाएं',
   },
 
+  // Settings redesign
+  profile: {
+    en: 'Profile',
+    hi: 'प्रोफ़ाइल',
+  },
+  editProfile: {
+    en: 'Edit Profile',
+    hi: 'प्रोफ़ाइल संपादित करें',
+  },
+  preferences: {
+    en: 'Preferences',
+    hi: 'प्राथमिकताएं',
+  },
+  dailyCropAlerts: {
+    en: 'Daily Crop Alerts',
+    hi: 'दैनिक फसल अलर्ट',
+  },
+  mandiPriceUpdates: {
+    en: 'Mandi Price Updates',
+    hi: 'मंडी भाव अपडेट',
+  },
+  weatherWarnings: {
+    en: 'Weather Warnings',
+    hi: 'मौसम चेतावनी',
+  },
+  saveForOffline: {
+    en: 'Save data for offline use',
+    hi: 'ऑफ़लाइन उपयोग के लिए डेटा सहेजें',
+  },
+  worksWithoutInternet: {
+    en: 'Works without internet',
+    hi: 'इंटरनेट के बिना काम करता है',
+  },
+  clearCachedData: {
+    en: 'Clear cached data',
+    hi: 'कैश्ड डेटा साफ़ करें',
+  },
+  helpAndSupport: {
+    en: 'Help & Support',
+    hi: 'मदद और सहायता',
+  },
+  howToUsePiritiya: {
+    en: 'How to use Piritiya',
+    hi: 'पिरितिया कैसे इस्तेमाल करें',
+  },
+  contactSupport: {
+    en: 'Contact Support',
+    hi: 'सहायता से संपर्क करें',
+  },
+  sendFeedback: {
+    en: 'Send Feedback',
+    hi: 'फीडबैक भेजें',
+  },
+  about: {
+    en: 'About',
+    hi: 'के बारे में',
+  },
+  feedbackPlaceholder: {
+    en: 'Tell us what you think...',
+    hi: 'बताएं आप क्या सोचते हैं...',
+  },
+  feedbackThankYou: {
+    en: 'Thank you for your feedback.',
+    hi: 'आपके फीडबैक के लिए धन्यवाद।',
+  },
+  logOut: {
+    en: 'Log out',
+    hi: 'लॉग आउट',
+  },
+  district: {
+    en: 'District',
+    hi: 'जिला',
+  },
+  block: {
+    en: 'Block',
+    hi: 'ब्लॉक',
+  },
+  landSize: {
+    en: 'Land size',
+    hi: 'जमीन का आकार',
+  },
+  nameLabel: {
+    en: 'Name',
+    hi: 'नाम',
+  },
+  storageUsed: {
+    en: 'Storage used',
+    hi: 'उपयोग किया गया स्टोरेज',
+  },
+
   // Data Labels
   soilMoisture: {
     en: 'Soil Moisture',

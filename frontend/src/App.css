@@ -15,11 +15,3 @@ body {
 input, button, textarea {
   font-family: inherit;
 }
-
-/* Language sheet overlay */
-.lang-sheet-backdrop {
-  touch-action: none;
-}
-.lang-sheet {
-  touch-action: pan-y;
-}

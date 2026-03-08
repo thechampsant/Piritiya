@@ -15,6 +15,9 @@ export const API_ENDPOINTS = {
   SYNTHESIZE: '/speech/synthesize',
 } as const;
 
+/** WhatsApp link for Contact Support in Settings. Replace with real number as needed. */
+export const SUPPORT_WHATSAPP_URL = 'https://wa.me/919876543210';
+
 // Cache Configuration
 export const CACHE_SIZE_LIMIT_MB = 50;
 export const CACHE_SIZE_LIMIT_BYTES = CACHE_SIZE_LIMIT_MB * 1024 * 1024;

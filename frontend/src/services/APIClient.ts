@@ -116,7 +116,7 @@ export class APIClient {
   /**
    * Get a single farmer's details (e.g. for personalized greeting)
    */
-  async getFarmer(farmerId: string): Promise<{ farmer_id: string; farmer_name?: string } | null> {
+  async getFarmer(farmerId: string): Promise<{ farmer_id: string; farmer_name?: string; location?: { district?: string; block?: string }; land_details?: { total_area_hectares?: number } } | null> {
     if (!farmerId?.trim()) return null;
     const url = `${this.baseURL}${API_ENDPOINTS.FARMERS}/${encodeURIComponent(farmerId.trim())}`;
     try {
@@ -124,6 +124,21 @@ export class APIClient {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Update farmer profile (name, location, land_details). Partial update.
+   */
+  async updateFarmer(
+    farmerId: string,
+    payload: { farmer_name?: string; location?: { district?: string; block?: string }; land_details?: { total_area_hectares?: number } }
+  ): Promise<unknown> {
+    if (!farmerId?.trim()) throw new Error('Farmer ID is required');
+    const url = `${this.baseURL}${API_ENDPOINTS.FARMERS}/${encodeURIComponent(farmerId.trim())}`;
+    return this.fetchWithRetry(url, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
   }
 
   /**
@@ -136,7 +151,11 @@ export class APIClient {
     }
 
     const url = `${this.baseURL}${API_ENDPOINTS.SOIL_MOISTURE}/${id}`;
-    return this.fetchWithRetry(url);
+    const data = await this.fetchWithRetry<SoilMoistureData | { statusCode: number; body: string }>(url);
+    if (data && typeof (data as { statusCode?: number; body?: string }).body === 'string' && (data as { statusCode?: number }).statusCode === 200) {
+      return JSON.parse((data as { body: string }).body) as SoilMoistureData;
+    }
+    return data as SoilMoistureData;
   }
 
   /**

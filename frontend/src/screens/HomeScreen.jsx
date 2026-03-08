@@ -14,6 +14,7 @@ import CropRecommendationList from '../components/CropRecommendationList';
 import MarketPriceTable from '../components/MarketPriceTable';
 import VoiceFeedback from '../components/VoiceFeedback';
 import LangSheet from './components/LangSheet';
+import BottomSheet from '../components/BottomSheet';
 import { playVoiceBeep } from '../utils/voiceSounds';
 
 /**
@@ -30,6 +31,7 @@ const HomeScreen = ({ onNavigate }) => {
   const { language } = useLanguage();
   const [queryHistory, setQueryHistory] = useState([]); // { text, timestamp }[]
   const [farmerName, setFarmerName] = useState(null); // from backend for greeting
+  const [farmerLocation, setFarmerLocation] = useState(null); // { district, block } for header
 
   const formatHistoryDate = (ts) => {
     const d = new Date(ts);
@@ -101,18 +103,30 @@ const HomeScreen = ({ onNavigate }) => {
     setQueryHistory(getQueryHistory?.() ?? []);
   }, [getQueryHistory]);
 
-  /** Fetch farmer name for personalized greeting when farmerId is set. */
+  /** Fetch farmer name and location for greeting and header when farmerId is set. */
   useEffect(() => {
     const id = (appState.farmerId || '').trim();
     if (!id) {
       setFarmerName(null);
+      setFarmerLocation(null);
       return;
     }
     let cancelled = false;
     apiClient.getFarmer(id).then((farmer) => {
-      if (!cancelled && farmer?.farmer_name) setFarmerName(farmer.farmer_name);
-      else if (!cancelled) setFarmerName(null);
-    }).catch(() => { if (!cancelled) setFarmerName(null); });
+      if (cancelled) return;
+      if (farmer?.farmer_name) setFarmerName(farmer.farmer_name);
+      else setFarmerName(null);
+      if (farmer?.location && (farmer.location.district || farmer.location.block)) {
+        setFarmerLocation({ district: farmer.location.district || '', block: farmer.location.block || '' });
+      } else {
+        setFarmerLocation(null);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setFarmerName(null);
+        setFarmerLocation(null);
+      }
+    });
     return () => { cancelled = true; };
   }, [appState.farmerId]);
 
@@ -167,6 +181,7 @@ const HomeScreen = ({ onNavigate }) => {
   };
 
   const handleQuickAction = async (action) => {
+    if (advisoryLoading) return;
     const canFetch =
       appState.isOnline &&
       (action.id === 'soil' || action.id === 'crop' || action.id === 'crops' || action.id === 'market');
@@ -182,6 +197,7 @@ const HomeScreen = ({ onNavigate }) => {
             data: {
               moistureLevel: data.moisture_index ?? 0,
               timestamp: data.measurement_date ? new Date(data.measurement_date).getTime() : Date.now(),
+              trend: data.trend,
             },
           });
           showPanel = true;
@@ -235,6 +251,13 @@ const HomeScreen = ({ onNavigate }) => {
   ];
 
   const currentPromptText = prompts[currentPromptIndex];
+
+  const showAdvisorySheet = !!(advisoryPanel || advisoryLoading || advisoryError);
+
+  const closeAdvisorySheet = () => {
+    setAdvisoryPanel(null);
+    setAdvisoryError(null);
+  };
 
   return (
     <div
@@ -293,37 +316,51 @@ const HomeScreen = ({ onNavigate }) => {
                 gap: '6px',
               }}
             >
-              <div
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: appState.isOnline ? 'rgba(19,136,8,0.28)' : 'rgba(234,179,8,0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {appState.isOnline && (
+              {farmerLocation && (farmerLocation.district || farmerLocation.block) ? (
+                <span
+                  style={{
+                    fontFamily: typography.fonts.sans,
+                    fontSize: '12px',
+                    color: colors.text.secondary,
+                  }}
+                >
+                  📍 {[farmerLocation.district, farmerLocation.block].filter(Boolean).join(', ')}
+                </span>
+              ) : (
+                <>
                   <div
                     style={{
-                      width: '5px',
-                      height: '5px',
+                      width: '12px',
+                      height: '12px',
                       borderRadius: '50%',
-                      background: colors.green.default,
+                      background: appState.isOnline ? 'rgba(19,136,8,0.28)' : 'rgba(234,179,8,0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                  />
-                )}
-              </div>
-              <span
-                style={{
-                  fontFamily: typography.fonts.sans,
-                  fontSize: '12px',
-                  color: appState.isOnline ? '#15803d' : colors.text.secondary,
-                }}
-              >
-                {appState.isOnline ? (language === 'hi' ? 'ऑनलाइन' : 'online') : (language === 'hi' ? 'ऑफ़लाइन' : 'offline')}
-              </span>
+                  >
+                    {appState.isOnline && (
+                      <div
+                        style={{
+                          width: '5px',
+                          height: '5px',
+                          borderRadius: '50%',
+                          background: colors.green.default,
+                        }}
+                      />
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: typography.fonts.sans,
+                      fontSize: '12px',
+                      color: appState.isOnline ? '#15803d' : colors.text.secondary,
+                    }}
+                  >
+                    {appState.isOnline ? (language === 'hi' ? 'ऑनलाइन' : 'online') : (language === 'hi' ? 'ऑफ़लाइन' : 'offline')}
+                  </span>
+                </>
+              )}
             </div>
             <button
               type="button"
@@ -447,7 +484,13 @@ const HomeScreen = ({ onNavigate }) => {
           }}
         >
           {quickActions.map((action) => (
-            <div key={action.id}>
+            <div
+              key={action.id}
+              role="button"
+              tabIndex={0}
+              onPointerDown={() => handleQuickAction(action)}
+              onTouchEnd={(e) => { e.preventDefault(); handleQuickAction(action); }}
+            >
               <PillChip
                 label={action.label}
                 onPress={() => handleQuickAction(action)}
@@ -606,113 +649,94 @@ const HomeScreen = ({ onNavigate }) => {
       </div>
 
       {/* Advisory data panel (soil / crop / market from REST API) */}
-      {(advisoryPanel || advisoryLoading || advisoryError) && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            background: 'rgba(0,0,0,0.4)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-          }}
-          onClick={() => {
-            setAdvisoryPanel(null);
-            setAdvisoryError(null);
-          }}
-        >
+      <BottomSheet
+        isOpen={showAdvisorySheet}
+        onClose={closeAdvisorySheet}
+        showDragHandle={false}
+        header={
           <div
             style={{
-              background: '#fff',
-              borderTopLeftRadius: radii.xl,
-              borderTopRightRadius: radii.xl,
-              maxHeight: '70vh',
-              width: '100%',
-              maxWidth: 420,
-              overflow: 'auto',
-              boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+              flexShrink: 0,
+              padding: spacing['4'],
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid rgba(0,0,0,0.08)',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div
+            <span
               style={{
-                padding: spacing['4'],
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid rgba(0,0,0,0.08)',
+                fontFamily: typography.fonts.sans,
+                fontWeight: 600,
+                fontSize: typography.size.lg,
+                color: '#1f2937',
               }}
             >
-              <span
-                style={{
-                  fontFamily: typography.fonts.sans,
-                  fontWeight: 600,
-                  fontSize: typography.size.lg,
-                  color: '#1f2937',
-                }}
-              >
-                {advisoryPanel?.type === 'soil'
-                  ? (language === 'hi' ? 'मिट्टी की नमी' : 'Soil moisture')
-                  : advisoryPanel?.type === 'crop'
-                    ? (language === 'hi' ? 'फसल सलाह' : 'Crop advice')
-                    : advisoryPanel?.type === 'market'
-                      ? (language === 'hi' ? 'बाज़ार भाव' : 'Market prices')
-                      : (language === 'hi' ? 'जानकारी' : 'Advisory')}
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAdvisoryPanel(null);
-                  setAdvisoryError(null);
-                }}
-                style={{
-                  padding: '8px 16px',
-                  fontFamily: typography.fonts.sans,
-                  fontSize: 14,
-                  color: '#6b7280',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {language === 'hi' ? 'बंद करें' : 'Close'}
-              </button>
-            </div>
-            <div style={{ padding: spacing['4'] }}>
-              {advisoryLoading && (
-                <p style={{ fontFamily: typography.fonts.sans, color: '#6b7280' }}>
-                  {language === 'hi' ? 'लोड हो रहा है…' : 'Loading…'}
-                </p>
-              )}
-              {advisoryError && (
-                <p style={{ fontFamily: typography.fonts.sans, color: colors.status?.error || '#dc2626' }}>
-                  {advisoryError}
-                </p>
-              )}
-              {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'soil' && (
-                <SoilMoistureDisplay
-                  moistureLevel={advisoryPanel.data.moistureLevel}
-                  timestamp={advisoryPanel.data.timestamp}
-                  language={language}
-                />
-              )}
-              {advisoryPanel && !advisoryLoading && (advisoryPanel.type === 'crop' || advisoryPanel.type === 'crops') && (
-                <CropRecommendationList
-                  recommendations={advisoryPanel.data.recommendations}
-                  language={language}
-                />
-              )}
-              {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'market' && (
-                <MarketPriceTable
-                  prices={advisoryPanel.data.prices}
-                  language={language}
-                />
-              )}
-            </div>
+              {advisoryPanel?.type === 'soil'
+                ? (language === 'hi' ? 'मिट्टी की नमी' : 'Soil moisture')
+                : advisoryPanel?.type === 'crop'
+                  ? (language === 'hi' ? 'फसल सलाह' : 'Crop advice')
+                  : advisoryPanel?.type === 'market'
+                    ? (language === 'hi' ? 'बाज़ार भाव' : 'Market prices')
+                    : (language === 'hi' ? 'जानकारी' : 'Advisory')}
+            </span>
+            <button
+              type="button"
+              onClick={closeAdvisorySheet}
+              onPointerDown={(e) => { e.preventDefault(); closeAdvisorySheet(); }}
+              onTouchEnd={(e) => { e.preventDefault(); closeAdvisorySheet(); }}
+              style={{
+                padding: '8px 16px',
+                fontFamily: typography.fonts.sans,
+                fontSize: 14,
+                color: '#6b7280',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {language === 'hi' ? 'बंद करें' : 'Close'}
+            </button>
           </div>
+        }
+      >
+        <div style={{ padding: spacing['4'] }}>
+          {advisoryLoading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ height: 16, borderRadius: 4, background: 'rgba(0,0,0,0.08)', width: '60%', animation: 'advisorySkeletonPulse 1.2s ease-in-out infinite' }} />
+              <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '90%' }} />
+              <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '75%' }} />
+              <div style={{ height: 40, borderRadius: 8, background: 'rgba(0,0,0,0.06)', width: '100%' }} />
+              <div style={{ height: 12, borderRadius: 4, background: 'rgba(0,0,0,0.06)', width: '50%' }} />
+            </div>
+          )}
+          {advisoryError && !advisoryLoading && (
+            <p style={{ fontFamily: typography.fonts.sans, color: colors.status?.error || '#dc2626' }}>
+              {advisoryError}
+            </p>
+          )}
+          {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'soil' && (
+            <SoilMoistureDisplay
+              moistureLevel={advisoryPanel.data.moistureLevel}
+              timestamp={advisoryPanel.data.timestamp}
+              trend={advisoryPanel.data.trend}
+              language={language}
+            />
+          )}
+          {advisoryPanel && !advisoryLoading && (advisoryPanel.type === 'crop' || advisoryPanel.type === 'crops') && (
+            <CropRecommendationList
+              recommendations={advisoryPanel.data.recommendations}
+              language={language}
+            />
+          )}
+          {advisoryPanel && !advisoryLoading && advisoryPanel.type === 'market' && (
+            <MarketPriceTable
+              prices={advisoryPanel.data.prices}
+              language={language}
+            />
+          )}
         </div>
-      )}
+      </BottomSheet>
 
       {showClearHistoryConfirm && (
         <div

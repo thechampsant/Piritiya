@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from decimal import Decimal
 from pydantic import BaseModel
 from typing import Optional
 
@@ -131,10 +132,96 @@ def get_farmer(farmer_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class FarmerLocationUpdate(BaseModel):
+    district: Optional[str] = None
+    block: Optional[str] = None
+
+
+class FarmerLandDetailsUpdate(BaseModel):
+    total_area_hectares: Optional[float] = None
+
+
+class FarmerProfileUpdate(BaseModel):
+    farmer_name: Optional[str] = None
+    location: Optional[FarmerLocationUpdate] = None
+    land_details: Optional[FarmerLandDetailsUpdate] = None
+
+
+@app.patch("/farmers/{farmer_id}")
+def update_farmer(farmer_id: str, body: FarmerProfileUpdate):
+    """Update farmer profile (name, location, land_details). Partial update."""
+    try:
+        table = dynamodb.Table('Farmers')
+        response = table.get_item(Key={'farmer_id': farmer_id})
+        if 'Item' not in response:
+            raise HTTPException(status_code=404, detail="Farmer not found")
+        item = response['Item']
+
+        update_expr_parts = []
+        expr_names = {}
+        expr_values = {}
+
+        if body.farmer_name is not None:
+            update_expr_parts.append("#fn = :fn")
+            expr_names["#fn"] = "farmer_name"
+            expr_values[":fn"] = body.farmer_name
+        if body.location is not None:
+            loc = item.get('location') or {}
+            if isinstance(loc, dict):
+                loc = dict(loc)
+            else:
+                loc = dict(loc)
+            if body.location.district is not None:
+                loc['district'] = body.location.district
+            if body.location.block is not None:
+                loc['block'] = body.location.block
+            update_expr_parts.append("#loc = :loc")
+            expr_names["#loc"] = "location"
+            expr_values[":loc"] = loc
+        if body.land_details is not None:
+            land = item.get('land_details') or {}
+            if isinstance(land, dict):
+                land = dict(land)
+            else:
+                land = dict(land)
+            if body.land_details.total_area_hectares is not None:
+                land['total_area_hectares'] = Decimal(str(body.land_details.total_area_hectares))
+            update_expr_parts.append("#ld = :ld")
+            expr_names["#ld"] = "land_details"
+            expr_values[":ld"] = land
+
+        if not update_expr_parts:
+            return item
+
+        update_expr = "SET " + ", ".join(update_expr_parts)
+        table.update_item(
+            Key={'farmer_id': farmer_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeNames=expr_names,
+            ExpressionAttributeValues=expr_values,
+            ReturnValues="ALL_NEW",
+        )
+        updated = table.get_item(Key={'farmer_id': farmer_id})
+        return updated.get('Item', item)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/soil-moisture/{farmer_id}")
 def get_soil_moisture(farmer_id: str):
     """Get soil moisture data for a farmer"""
     result = invoke_lambda('get-soil-moisture', {'farmer_id': farmer_id})
+    if isinstance(result, dict) and result.get('statusCode') == 200 and 'body' in result:
+        return json.loads(result['body'])
+    if isinstance(result, dict) and result.get('statusCode') != 200 and 'body' in result:
+        try:
+            err = json.loads(result['body'])
+            raise HTTPException(status_code=result.get('statusCode', 500), detail=err.get('error', result['body']))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=result.get('statusCode', 500), detail=result['body'])
     return result
 
 @app.post("/crop-advice")
