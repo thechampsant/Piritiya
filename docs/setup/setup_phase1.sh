@@ -84,7 +84,7 @@ echo "------------------------------"
 if aws s3 ls s3://piritiya-data 2>/dev/null; then
     echo "✓ Bucket piritiya-data already exists"
 else
-    aws s3 mb s3://piritiya-data --region ap-south-1
+    aws s3 mb s3://piritiya-data --region us-east-1
     echo "✓ Created bucket: piritiya-data"
 fi
 

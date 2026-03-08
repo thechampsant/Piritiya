@@ -33,6 +33,7 @@ interface ChatContextValue {
   state: ChatState;
   sendMessage: (text: string) => Promise<void>;
   startNewSession: () => Promise<void>;
+  openSession: (sessionId: string) => void;
   syncPendingQueries: () => Promise<void>;
   clearError: () => void;
 }
@@ -146,7 +147,7 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
       }
 
       await sendMessageHook(text);
-      addQueryToHistory(text);
+      addQueryToHistory(text, sessionId);
 
       // Update pending queries after sending
       const queries = await dbRepository.getPendingQueries();
@@ -154,6 +155,15 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
     },
     [sessionId, sendMessageHook, addQueryToHistory]
   );
+
+  /**
+   * Open an existing session (e.g. when user taps a past conversation pill chip).
+   */
+  const openSession = useCallback((targetSessionId: string) => {
+    if (targetSessionId && targetSessionId.trim() !== '') {
+      setSessionId(targetSessionId.trim());
+    }
+  }, []);
 
   /**
    * Start a new session
@@ -207,6 +217,7 @@ export function ChatProvider({ children, farmerId }: ChatProviderProps) {
     state,
     sendMessage,
     startNewSession,
+    openSession,
     syncPendingQueries,
     clearError,
   };

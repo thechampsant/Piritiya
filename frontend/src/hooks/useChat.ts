@@ -60,6 +60,15 @@ export function useChat({ sessionId, farmerId }: UseChatOptions): UseChatReturn 
   }, [sessionId]);
 
   /**
+   * When cache is cleared from Settings, clear in-memory messages so the Chat tab updates immediately.
+   */
+  useEffect(() => {
+    const handler = () => setMessages([]);
+    window.addEventListener('piritiya-cache-cleared', handler);
+    return () => window.removeEventListener('piritiya-cache-cleared', handler);
+  }, []);
+
+  /**
    * Clear error state
    */
   const clearError = useCallback(() => {

@@ -37,6 +37,7 @@ const QUERY_HISTORY_MAX = 20;
 export interface QueryHistoryItem {
   text: string;
   timestamp: number;
+  sessionId?: string;
 }
 
 interface AppContextValue {
@@ -46,8 +47,9 @@ interface AppContextValue {
   toggleVoice: () => Promise<void>;
   setUseAwsVoice: (value: boolean) => Promise<void>;
   retryBackendCheck: () => void;
-  addQueryToHistory: (text: string) => void;
+  addQueryToHistory: (text: string, sessionId?: string) => void;
   getQueryHistory: () => QueryHistoryItem[];
+  clearQueryHistory: () => void;
   isLoading: boolean;
 }
 
@@ -305,7 +307,11 @@ export function AppProvider({ children }: AppProviderProps) {
       return parsed.map((item: unknown) => {
         if (item && typeof item === 'object' && 'text' in item && typeof (item as QueryHistoryItem).text === 'string') {
           const obj = item as QueryHistoryItem;
-          return { text: obj.text, timestamp: typeof obj.timestamp === 'number' ? obj.timestamp : Date.now() };
+          return {
+            text: obj.text,
+            timestamp: typeof obj.timestamp === 'number' ? obj.timestamp : Date.now(),
+            sessionId: typeof (obj as QueryHistoryItem).sessionId === 'string' ? (obj as QueryHistoryItem).sessionId : undefined,
+          };
         }
         return { text: String(item), timestamp: Date.now() };
       });
@@ -314,19 +320,29 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, []);
 
-  const addQueryToHistory = useCallback((text: string) => {
+  const addQueryToHistory = useCallback((text: string, sessionId?: string) => {
     const trimmed = (text || '').trim();
     if (!trimmed) return;
     try {
       if (typeof localStorage === 'undefined') return;
       const prev = getQueryHistory();
-      const entry: QueryHistoryItem = { text: trimmed, timestamp: Date.now() };
+      const entry: QueryHistoryItem = { text: trimmed, timestamp: Date.now(), sessionId };
       const next = [entry, ...prev.filter((item) => item.text !== trimmed)].slice(0, QUERY_HISTORY_MAX);
       localStorage.setItem(QUERY_HISTORY_KEY, JSON.stringify(next));
     } catch {
       // ignore
     }
   }, [getQueryHistory]);
+
+  const clearQueryHistory = useCallback(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(QUERY_HISTORY_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const value: AppContextValue = {
     state,
@@ -337,6 +353,7 @@ export function AppProvider({ children }: AppProviderProps) {
     retryBackendCheck,
     addQueryToHistory,
     getQueryHistory,
+    clearQueryHistory,
     isLoading,
   };
 

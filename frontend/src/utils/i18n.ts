@@ -203,9 +203,41 @@ const translations = {
     en: 'Are you sure you want to clear the cache?',
     hi: 'क्या आप वाकई कैश साफ़ करना चाहते हैं?',
   },
+  clearCacheConfirmTitle: {
+    en: 'Clear cache and data?',
+    hi: 'कैश और डेटा साफ़ करें?',
+  },
+  clearCacheConfirmMessage: {
+    en: 'This will remove cached responses, all chat messages, past conversation shortcuts from the Home screen, and app cache. Your account and settings will not be affected.',
+    hi: 'इससे कैश्ड जवाब, सभी चैट संदेश, होम स्क्रीन के पिछली बातचीत शॉर्टकट और ऐप कैश हट जाएंगे। आपका खाता और सेटिंग्स प्रभावित नहीं होंगे।',
+  },
+  clearCacheConfirmButton: {
+    en: 'Clear all',
+    hi: 'सभी साफ़ करें',
+  },
   confirmClearAllData: {
     en: 'Are you sure you want to clear all data? This cannot be undone.',
     hi: 'क्या आप वाकई सभी डेटा साफ़ करना चाहते हैं? इसे पूर्ववत नहीं किया जा सकता।',
+  },
+  clearPastConversationsTitle: {
+    en: 'Clear past conversations?',
+    hi: 'पिछली बातचीत हटाएं?',
+  },
+  clearPastConversationsMessage: {
+    en: 'This will remove all shortcuts to past conversations from the Home screen. Your full chat messages in the Chat tab will not be deleted.',
+    hi: 'इससे होम स्क्रीन से पिछली बातचीत के सभी शॉर्टकट हट जाएंगे। चैट टैब में आपके पूरे संदेश नहीं हटेंगे।',
+  },
+  clearPastConversationsConfirm: {
+    en: 'Clear all',
+    hi: 'सभी हटाएं',
+  },
+  clearPastConversationsCancel: {
+    en: 'Cancel',
+    hi: 'रद्द करें',
+  },
+  clearPastConversationsButton: {
+    en: 'Clear past conversations',
+    hi: 'पिछली बातचीत हटाएं',
   },
 
   // Data Labels

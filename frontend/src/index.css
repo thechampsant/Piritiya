@@ -1,10 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Global styles */
+/* Global styles - primary (Devanagari) and data (Inter) for all screens */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-primary: 'Noto Sans Devanagari', sans-serif;
+  --font-data: 'Inter', sans-serif;
+
+  font-family: var(--font-primary);
   line-height: 1.5;
   font-weight: 400;
 
@@ -27,6 +32,7 @@
 body {
   min-height: 100vh;
   font-size: 16px; /* Minimum font size for accessibility */
+  font-family: var(--font-primary);
 }
 
 /* Focus styles for keyboard navigation */

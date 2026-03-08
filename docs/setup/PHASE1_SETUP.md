@@ -37,7 +37,7 @@ aws configure
 
 ```bash
 # Create bucket for NISAR data
-aws s3 mb s3://piritiya-data --region ap-south-1
+aws s3 mb s3://piritiya-data --region us-east-1
 
 # Create bucket for government scheme PDFs
 aws s3 mb s3://piritiya-knowledge-base --region ap-south-1

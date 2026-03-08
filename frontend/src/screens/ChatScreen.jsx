@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { FrostedCard, AmbientBg } from '@ds/components';
+import { FrostedCard, AmbientBg, VoiceOrb } from '@ds/components';
 import { colors, spacing, typography, radii, animation } from '@ds/tokens';
-import { WifiOff, Archive, Mic, PiritiyaMark } from '@ds/icons';
+import { WifiOff, Archive, PiritiyaMark } from '@ds/icons';
 import { getTranslation } from '../utils/i18n';
 import { useChatContext } from '../contexts/ChatContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -28,8 +28,10 @@ import LangSheet from './components/LangSheet';
  *
  * Requirements: 27.1, 27.2, 27.3, 27.4, 27.5, 27.6, 27.7, 27.8, 27.9
  */
+const OPEN_SESSION_KEY = 'piritiya_open_session_id';
+
 const ChatScreen = ({ onNavigate }) => {
-  const { state: chatState, sendMessage, startNewSession } = useChatContext();
+  const { state: chatState, sendMessage, startNewSession, openSession } = useChatContext();
   const { language, formatTime } = useLanguage();
   const { state: appState, setLanguage } = useApp();
   const { isListening, transcript, startListening, stopListening, isSupported } = useVoiceInput(language, {
@@ -42,6 +44,17 @@ const ChatScreen = ({ onNavigate }) => {
   const { messages, isLoading } = chatState;
 
   const t = (key) => getTranslation(key, language);
+
+  /** When opened from a past-conversation pill, switch to that session so the same thread is shown. */
+  useEffect(() => {
+    try {
+      const id = typeof localStorage !== 'undefined' ? localStorage.getItem(OPEN_SESSION_KEY) : null;
+      if (id && String(id).trim()) {
+        openSession(String(id).trim());
+        localStorage.removeItem(OPEN_SESSION_KEY);
+      }
+    } catch (_) {}
+  }, [openSession]);
 
   /**
    * Auto-scroll to latest message
@@ -60,7 +73,7 @@ const ChatScreen = ({ onNavigate }) => {
   }, [transcript]);
 
   const handleVoiceOrbClick = () => {
-    if (!appState.voiceEnabled || !isSupported) return;
+    if (!appState.voiceEnabled || !isSupported || isLoading) return;
     if (isListening) stopListening();
     else startListening();
   };
@@ -213,7 +226,7 @@ const ChatScreen = ({ onNavigate }) => {
     >
       <AmbientBg />
 
-      {/* Frosted header */}
+      {/* Frosted header - same padding/height as other screens */}
       <div
         style={{
           background: 'rgba(255,255,255,0.65)',
@@ -223,7 +236,8 @@ const ChatScreen = ({ onNavigate }) => {
           flexShrink: 0,
           zIndex: 10,
           position: 'relative',
-          padding: '0 16px 12px',
+          padding: '14px 20px',
+          minHeight: '56px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -315,8 +329,8 @@ const ChatScreen = ({ onNavigate }) => {
           <button
             onClick={() => onNavigate && onNavigate('home')}
             style={{
-              width: '28px',
-              height: '28px',
+              width: '32px',
+              height: '32px',
               borderRadius: '50%',
               background: 'rgba(0,0,0,0.05)',
               border: 'none',
@@ -404,7 +418,7 @@ const ChatScreen = ({ onNavigate }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Voice-only input area - fixed above bottom navigation */}
+      {/* Voice-only input area - same VoiceOrb as Home screen, fixed above bottom navigation */}
       <div
         style={{
           position: 'fixed',
@@ -413,7 +427,7 @@ const ChatScreen = ({ onNavigate }) => {
           right: 0,
           maxWidth: '390px',
           margin: '0 auto',
-          padding: '10px 16px 12px',
+          padding: '16px 16px 12px',
           background: 'rgba(255,255,255,0.7)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
@@ -422,35 +436,14 @@ const ChatScreen = ({ onNavigate }) => {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '8px',
+          gap: '12px',
         }}
       >
-        <button
-          onClick={handleVoiceOrbClick}
-          disabled={!appState.voiceEnabled || !isSupported || isLoading}
-          style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '50%',
-            border: 'none',
-            background: appState.voiceEnabled && isSupported && !isLoading ? colors.green.default : 'rgba(0,0,0,0.12)',
-            color: 'white',
-            cursor: appState.voiceEnabled && isSupported && !isLoading ? 'pointer' : 'not-allowed',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.2s ease',
-            boxShadow: appState.voiceEnabled && isSupported && !isLoading ? '0 2px 12px rgba(19,136,8,0.3)' : 'none',
-            opacity: appState.voiceEnabled && isSupported ? (isListening ? 1 : 0.9) : 0.5,
-          }}
-          aria-label={
-            isListening
-              ? (language === 'hi' ? 'सुनना बंद करें' : 'Stop listening')
-              : (language === 'hi' ? 'बोलें' : 'Tap to speak')
-          }
-        >
-          <Mic size={24} color="white" />
-        </button>
+        <VoiceOrb
+          size={72}
+          isListening={isListening}
+          onPress={handleVoiceOrbClick}
+        />
         <span
           style={{
             fontFamily: typography.fonts.sans,

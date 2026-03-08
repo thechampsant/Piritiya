@@ -101,19 +101,8 @@ const ExploreScreen = ({ onNavigate }) => {
       }}
     >
       <AmbientBg />
-
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          paddingBottom: '82px',
-          animation: `fadeUp ${animation.duration.slow} ${animation.easing.default}`,
-        }}
-      >
-        {/* Frosted header */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', paddingBottom: '82px', animation: `fadeUp ${animation.duration.slow} ${animation.easing.default}` }}>
+        {/* Frosted header - same padding/height as other screens */}
         <div
           style={{
             background: 'rgba(255,255,255,0.65)',
@@ -123,49 +112,54 @@ const ExploreScreen = ({ onNavigate }) => {
             flexShrink: 0,
             zIndex: 10,
             position: 'relative',
-            padding: '0 20px 14px',
+            padding: '14px 20px',
+            minHeight: '56px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-            <div>
-              <h2
-                style={{
-                  fontFamily: typography.fonts.serif,
-                  fontSize: '22px',
-                  fontWeight: typography.weight.semibold,
-                  color: colors.text.primary,
-                }}
-              >
-                {language === 'hi' ? 'खोजें' : 'Explore'}
-              </h2>
-              <p
-                style={{
-                  color: 'rgba(20,30,16,0.4)',
-                  fontSize: '12px',
-                  marginTop: '2px',
-                  fontFamily: typography.fonts.sans,
-                }}
-              >
-                {language === 'hi' ? 'अपने खेत के लिए सुझाव और सलाह' : 'Tips & advice for your farm'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowLangSheet(true)}
+          <div>
+            <h2
               style={{
-                background: 'rgba(0,0,0,0.06)',
-                border: '1px solid rgba(0,0,0,0.1)',
-                borderRadius: radii.full,
-                padding: '4px 9px',
-                fontSize: '11px',
-                fontWeight: typography.weight.medium,
+                fontFamily: typography.fonts.serif,
+                fontSize: '20px',
+                fontWeight: typography.weight.semibold,
                 color: colors.text.primary,
-                cursor: 'pointer',
-                fontFamily: typography.fonts.sans,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
+                margin: 0,
               }}
+            >
+              {language === 'hi' ? 'समाचार' : 'News'}
+            </h2>
+            <p
+              style={{
+                color: 'rgba(20,30,16,0.4)',
+                fontSize: '12px',
+                marginTop: '2px',
+                marginBottom: 0,
+                fontFamily: typography.fonts.sans,
+              }}
+            >
+              {language === 'hi' ? 'अपने खेत के लिए सुझाव और सलाह' : 'Tips & advice for your farm'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowLangSheet(true)}
+            style={{
+              background: 'rgba(0,0,0,0.06)',
+              border: '1px solid rgba(0,0,0,0.1)',
+              borderRadius: '100px',
+              padding: '4px 9px',
+              fontSize: '11px',
+              fontWeight: '500',
+              color: colors.text.primary,
+              cursor: 'pointer',
+              fontFamily: typography.fonts.sans,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
               aria-haspopup="dialog"
               aria-expanded={showLangSheet}
             >
@@ -173,7 +167,6 @@ const ExploreScreen = ({ onNavigate }) => {
               <span style={{ color: 'rgba(20,30,16,0.4)' }}>▾</span>
             </button>
           </div>
-        </div>
 
         {/* Category chips */}
         <div
@@ -464,18 +457,19 @@ const ExploreScreen = ({ onNavigate }) => {
         </div>
       </div>
 
-      <LangSheet
-        isOpen={showLangSheet}
-        currentLang={language}
-        onSelect={async (code) => {
-          if (code === 'hi' || code === 'en') await setLanguage(code);
-          setShowLangSheet(false);
-        }}
-        onClose={() => setShowLangSheet(false)}
-        language={language}
-      />
-
-      <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+      <div>
+        <LangSheet
+          isOpen={showLangSheet}
+          currentLang={language}
+          onSelect={async (code) => {
+            if (code === 'hi' || code === 'en') await setLanguage(code);
+            setShowLangSheet(false);
+          }}
+          onClose={() => setShowLangSheet(false)}
+          language={language}
+        />
+        <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+      </div>
     </div>
   );
 };

@@ -229,8 +229,21 @@ export class DBRepository {
    * Clear all cached responses
    */
   async clearCache(): Promise<void> {
-    const db = await this.ensureDB();
-    await db.clear(DB_STORES.CACHED_RESPONSES);
+    try {
+      const db = await this.ensureDB();
+      const tx = db.transaction(DB_STORES.CACHED_RESPONSES, 'readwrite');
+      const store = tx.objectStore(DB_STORES.CACHED_RESPONSES);
+      store.clear();
+      await tx.done;
+    } catch (err) {
+      // If connection is stale/closed, force re-open and retry once
+      this.db = null;
+      const db = await this.ensureDB();
+      const tx = db.transaction(DB_STORES.CACHED_RESPONSES, 'readwrite');
+      const store = tx.objectStore(DB_STORES.CACHED_RESPONSES);
+      store.clear();
+      await tx.done;
+    }
   }
 
   // ==================== Pending Query Methods ====================
@@ -280,6 +293,29 @@ export class DBRepository {
   async clearPendingQueries(): Promise<void> {
     const db = await this.ensureDB();
     await db.clear(DB_STORES.PENDING_QUERIES);
+  }
+
+  /**
+   * Clear chat data (messages, sessions, pending queries) so the Chat tab shows empty after "Clear Cache".
+   */
+  async clearChatData(): Promise<void> {
+    const run = async (): Promise<void> => {
+      const db = await this.ensureDB();
+      const tx = db.transaction(
+        [DB_STORES.MESSAGES, DB_STORES.SESSIONS, DB_STORES.PENDING_QUERIES],
+        'readwrite'
+      );
+      tx.objectStore(DB_STORES.MESSAGES).clear();
+      tx.objectStore(DB_STORES.SESSIONS).clear();
+      tx.objectStore(DB_STORES.PENDING_QUERIES).clear();
+      await tx.done;
+    };
+    try {
+      await run();
+    } catch {
+      this.db = null;
+      await run();
+    }
   }
 
   // ==================== Utility Methods ====================

@@ -22,6 +22,14 @@
         "cloudfront:TagResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "CloudFrontInvalidateCache",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateInvalidation"
+      ],
+      "Resource": "*"
     }
   ]
 }

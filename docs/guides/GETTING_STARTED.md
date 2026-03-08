@@ -68,7 +68,7 @@ pip install -r requirements.txt
 
 ```bash
 # Create S3 buckets
-aws s3 mb s3://piritiya-data --region ap-south-1
+aws s3 mb s3://piritiya-data --region us-east-1
 aws s3 mb s3://piritiya-knowledge-base --region ap-south-1
 
 # Create DynamoDB tables
@@ -126,7 +126,7 @@ pip install boto3
 ### Issue: S3 bucket name already taken
 **Solution:** Bucket names are globally unique. Try:
 ```bash
-aws s3 mb s3://piritiya-data-$(date +%s) --region ap-south-1
+aws s3 mb s3://piritiya-data-$(date +%s) --region us-east-1
 ```
 
 ## What Gets Created

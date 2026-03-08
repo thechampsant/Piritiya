@@ -11,7 +11,10 @@ import { getTranslation, formatNumber } from '../utils/i18n';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { cacheManager } from '../services/CacheManager';
+import { dbRepository } from '../services/DBRepository';
 import LangSheet from './components/LangSheet';
+
+const CACHE_CLEARED_EVENT = 'piritiya-cache-cleared';
 
 /**
  * SettingsScreen - Settings management with design system components
@@ -20,10 +23,12 @@ import LangSheet from './components/LangSheet';
  * - Storage usage and app version display
  */
 const SettingsScreen = ({ onNavigate }) => {
-  const { state: appState, setFarmerId, setLanguage: setAppLanguage } = useApp();
+  const { state: appState, setFarmerId, setLanguage: setAppLanguage, clearQueryHistory } = useApp();
   const { language } = useLanguage();
   const [cacheSize, setCacheSize] = useState('0 MB');
   const [showLangSheet, setShowLangSheet] = useState(false);
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   const loadCacheSize = async () => {
     try {
@@ -39,13 +44,31 @@ const SettingsScreen = ({ onNavigate }) => {
     loadCacheSize();
   }, [language]);
 
-  const handleClearCache = async () => {
-    try {
-      await cacheManager.clearCache();
-      await loadCacheSize();
-    } catch (error) {
-      console.error('Failed to clear cache:', error);
-    }
+  const handleClearCacheConfirm = () => {
+    setShowClearCacheConfirm(false);
+    setCacheSize(`${formatNumber(0, language)} MB`);
+    setIsClearingCache(true);
+
+    (async () => {
+      try {
+        await cacheManager.clearCache();
+        await dbRepository.clearChatData();
+        if (typeof clearQueryHistory === 'function') clearQueryHistory();
+        if (typeof caches !== 'undefined') {
+          try {
+            const names = await caches.keys();
+            await Promise.all(names.map((name) => caches.delete(name)));
+          } catch (_) {}
+        }
+        window.dispatchEvent(new CustomEvent(CACHE_CLEARED_EVENT));
+        await loadCacheSize();
+      } catch (error) {
+        console.error('Failed to clear cache:', error);
+        await loadCacheSize();
+      } finally {
+        setIsClearingCache(false);
+      }
+    })();
   };
 
   return (
@@ -61,7 +84,7 @@ const SettingsScreen = ({ onNavigate }) => {
       {/* Background gradient */}
       <AmbientBg />
 
-      {/* Frosted header */}
+      {/* Frosted header - same padding/height as other screens */}
       <div
         style={{
           position: 'sticky',
@@ -71,40 +94,14 @@ const SettingsScreen = ({ onNavigate }) => {
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           borderBottom: '1px solid rgba(0,0,0,0.06)',
-          padding: '0 20px 14px',
+          padding: '14px 20px',
+          minHeight: '56px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            onClick={() => onNavigate && onNavigate('home')}
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.05)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-            aria-label={language === 'hi' ? 'वापस जाएं' : 'Go back'}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={colors.text.primary}
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <h2
             style={{
               fontFamily: typography.fonts.serif,
@@ -270,7 +267,12 @@ const SettingsScreen = ({ onNavigate }) => {
 
           <button
             type="button"
-            onClick={handleClearCache}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isClearingCache) setShowClearCacheConfirm(true);
+            }}
+            disabled={isClearingCache}
             style={{
               width: '100%',
               marginTop: spacing['4'],
@@ -278,16 +280,19 @@ const SettingsScreen = ({ onNavigate }) => {
               fontSize: typography.size.base,
               fontWeight: typography.weight.medium,
               color: colors.text.primary,
-              background: 'rgba(0,0,0,0.04)',
+              background: isClearingCache ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.04)',
               border: `1px solid ${colors.border.default}`,
               borderRadius: radii.lg,
               padding: `${spacing['3']} ${spacing['4']}`,
-              cursor: 'pointer',
+              cursor: isClearingCache ? 'wait' : 'pointer',
               minHeight: '44px',
               transition: 'all 0.2s ease',
+              opacity: isClearingCache ? 0.8 : 1,
             }}
           >
-            {getTranslation('clearCache', language)}
+            {isClearingCache
+              ? (language === 'hi' ? 'साफ़ हो रहा है...' : 'Clearing...')
+              : getTranslation('clearCache', language)}
           </button>
           </div>
         </SettingSection>
@@ -314,6 +319,102 @@ const SettingsScreen = ({ onNavigate }) => {
           <AWSBadge />
         </div>
       </div>
+
+      {/* Clear Cache confirmation dialog */}
+      {showClearCacheConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-cache-dialog-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: spacing['5'],
+            background: 'rgba(0,0,0,0.4)',
+          }}
+          onClick={() => setShowClearCacheConfirm(false)}
+        >
+          <div
+            style={{
+              background: colors.surface?.primary ?? '#fff',
+              borderRadius: radii.xl,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              maxWidth: '360px',
+              width: '100%',
+              padding: '24px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              id="clear-cache-dialog-title"
+              style={{
+                fontFamily: typography.fonts.serif,
+                fontSize: typography.size.lg,
+                fontWeight: typography.weight.semibold,
+                color: colors.text.primary,
+                margin: '0 0 12px 0',
+              }}
+            >
+              {getTranslation('clearCacheConfirmTitle', language)}
+            </h3>
+            <p
+              style={{
+                fontFamily: typography.fonts.sans,
+                fontSize: typography.size.sm,
+                color: colors.text.secondary,
+                lineHeight: 1.5,
+                margin: '0 0 20px 0',
+              }}
+            >
+              {getTranslation('clearCacheConfirmMessage', language)}
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowClearCacheConfirm(false)}
+                style={{
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.sm,
+                  color: colors.text.secondary,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                }}
+              >
+                {getTranslation('clearPastConversationsCancel', language)}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearCacheConfirm}
+                style={{
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.sm,
+                  fontWeight: typography.weight.medium,
+                  color: '#fff',
+                  background: colors.primary?.DEFAULT ?? '#16a34a',
+                  border: 'none',
+                  borderRadius: radii.md,
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                }}
+              >
+                {getTranslation('clearCacheConfirmButton', language)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Language Selection Sheet - matches design with grid, checkmark, तुरंत/थोड़ा धीमा */}
       <LangSheet

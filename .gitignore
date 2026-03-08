@@ -1,0 +1,2 @@
+# NISAR raw data (large binary; use S3 or separate storage)
+data/nisar_raw/*.h5

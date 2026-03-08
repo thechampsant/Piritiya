@@ -53,7 +53,7 @@ Create buckets in Mumbai region:
 
 ```bash
 # Create data bucket
-aws s3 mb s3://piritiya-data --region ap-south-1
+aws s3 mb s3://piritiya-data --region us-east-1
 
 # Create knowledge base bucket
 aws s3 mb s3://piritiya-knowledge-base --region ap-south-1
@@ -134,7 +134,7 @@ The script automatically uses `ap-south-1` region.
 
 **Solution:** S3 bucket names are globally unique. Try:
 ```bash
-aws s3 mb s3://piritiya-data-$(date +%s) --region ap-south-1
+aws s3 mb s3://piritiya-data-$(date +%s) --region us-east-1
 ```
 
 ### Issue: Lambda deployment fails
@@ -178,7 +178,7 @@ aws dynamodb create-global-table \
 Create CloudFront distribution for S3:
 ```bash
 aws cloudfront create-distribution \
-  --origin-domain-name piritiya-data.s3.ap-south-1.amazonaws.com \
+  --origin-domain-name piritiya-data.s3.us-east-1.amazonaws.com \
   --default-root-object index.html
 ```
 

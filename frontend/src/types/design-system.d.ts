@@ -142,6 +142,7 @@ declare module '@ds/tokens' {
     fonts: {
       serif: string;
       sans: string;
+      data: string;
       noto: string;
       hi: string;
       bn: string;

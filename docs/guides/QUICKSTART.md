@@ -40,7 +40,7 @@ aws configure
 cd piritiya
 
 # Create S3 buckets in Mumbai region
-aws s3 mb s3://piritiya-data --region ap-south-1
+aws s3 mb s3://piritiya-data --region us-east-1
 aws s3 mb s3://piritiya-knowledge-base --region ap-south-1
 
 # Create DynamoDB tables (automatically uses ap-south-1)

@@ -469,7 +469,17 @@ POLICY
     if [ -n "$CLOUDFRONT_DOMAIN" ]; then
         print_success "CloudFront domain: https://${CLOUDFRONT_DOMAIN}"
     fi
-    
+
+    # Step 8b: Invalidate CloudFront cache so the new deployment is visible immediately
+    if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "manual" ]; then
+        print_info "Step 8b: Invalidating CloudFront cache..."
+        if aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --output text 2>/dev/null; then
+            print_success "CloudFront invalidation created. New content will be visible within 1–2 minutes."
+        else
+            print_warning "CloudFront invalidation failed (check cloudfront:CreateInvalidation permission). You may see old content until cache TTL expires."
+        fi
+    fi
+
     # Step 9: S3 bucket policy (already done above if OAC was used; skip manual prompt)
     print_info "Step 9: S3 bucket policy (if 403 on app load, add CloudFront OAC policy in S3 bucket permissions)"
     

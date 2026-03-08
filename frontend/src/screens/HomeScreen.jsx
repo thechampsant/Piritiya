@@ -20,8 +20,10 @@ import LangSheet from './components/LangSheet';
  *
  * Requirements: 26.1, 26.2, 26.3, 26.4, 26.5, 26.6
  */
+const OPEN_SESSION_KEY = 'piritiya_open_session_id';
+
 const HomeScreen = ({ onNavigate }) => {
-  const { state: appState, setLanguage, getQueryHistory } = useApp();
+  const { state: appState, setLanguage, getQueryHistory, clearQueryHistory } = useApp();
   const { sendMessage } = useChatContext();
   const { language } = useLanguage();
   const [queryHistory, setQueryHistory] = useState([]); // { text, timestamp }[]
@@ -45,6 +47,7 @@ const HomeScreen = ({ onNavigate }) => {
 
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [showLangSheet, setShowLangSheet] = useState(false);
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
   const [advisoryPanel, setAdvisoryPanel] = useState(null);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [advisoryError, setAdvisoryError] = useState(null);
@@ -57,7 +60,7 @@ const HomeScreen = ({ onNavigate }) => {
       ]
     : [
         'What crop should I plant this season on my land?',
-        'what are the market prices today?',
+        'What are the market prices today?',
         'What to do when groundwater levels are low?',
       ];
   const diveBackLabel = language === 'hi' ? 'वापस आइए।' : 'dive back in.';
@@ -72,6 +75,12 @@ const HomeScreen = ({ onNavigate }) => {
   useEffect(() => {
     setQueryHistory(getQueryHistory?.() ?? []);
   }, [getQueryHistory]);
+
+  const handleClearPastConversations = () => {
+    clearQueryHistory?.();
+    setQueryHistory([]);
+    setShowClearHistoryConfirm(false);
+  };
 
   useEffect(() => {
     if (transcript && transcript.trim() !== '') {
@@ -91,6 +100,18 @@ const HomeScreen = ({ onNavigate }) => {
       if (onNavigate) onNavigate('chat');
     } catch (error) {
       console.error('Failed to send message:', error);
+    }
+  };
+
+  /** When user taps a past-conversation pill: open that conversation on Chat (don't send again). */
+  const handlePastConversationPress = (item) => {
+    if (item.sessionId) {
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(OPEN_SESSION_KEY, item.sessionId);
+      } catch (_) {}
+      if (onNavigate) onNavigate('chat');
+    } else {
+      handleQuerySubmit(item.text);
     }
   };
 
@@ -187,13 +208,14 @@ const HomeScreen = ({ onNavigate }) => {
           paddingBottom: '82px',
         }}
       >
-        {/* Header row */}
+        {/* Header row - same padding/height as other screens */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: `${spacing['4']} 20px ${spacing['3']}`,
+            padding: '14px 20px',
+            minHeight: '56px',
             flexShrink: 0,
             position: 'relative',
             zIndex: 5,
@@ -398,17 +420,50 @@ const HomeScreen = ({ onNavigate }) => {
         >
           {queryHistory.length > 0 && (
             <>
-              <p
+              <div
                 style={{
-                  fontFamily: typography.fonts.sans,
-                  fontSize: typography.size.xs,
-                  color: colors.text.tertiary || 'rgba(20,30,16,0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                   marginBottom: spacing['2'],
                   flexShrink: 0,
                 }}
               >
-                {language === 'hi' ? 'पिछली बातचीत' : 'Past conversations'}
-              </p>
+                <p
+                  style={{
+                    fontFamily: typography.fonts.sans,
+                    fontSize: typography.size.xs,
+                    color: colors.text.tertiary || 'rgba(20,30,16,0.5)',
+                    margin: 0,
+                  }}
+                >
+                  {language === 'hi' ? 'पिछली बातचीत' : 'Past conversations'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowClearHistoryConfirm(true)}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    color: colors.text.tertiary || 'rgba(20,30,16,0.5)',
+                  }}
+                  aria-label={getTranslation('clearPastConversationsButton', language)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
+              </div>
               <div
                 style={{
                   display: 'flex',
@@ -429,7 +484,7 @@ const HomeScreen = ({ onNavigate }) => {
                   >
                     <PillChip
                       label={(item.text || '').length > 40 ? `${(item.text || '').slice(0, 40)}…` : (item.text || '')}
-                      onPress={() => handleQuerySubmit(item.text)}
+                      onPress={() => handlePastConversationPress(item)}
                     />
                     <span
                       style={{
@@ -615,6 +670,101 @@ const HomeScreen = ({ onNavigate }) => {
                   language={language}
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearHistoryConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-history-dialog-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: spacing['5'],
+            background: 'rgba(0,0,0,0.4)',
+          }}
+          onClick={() => setShowClearHistoryConfirm(false)}
+        >
+          <div
+            style={{
+              background: colors.surface?.primary ?? '#fff',
+              borderRadius: radii.xl,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              maxWidth: '360px',
+              width: '100%',
+              padding: '24px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              id="clear-history-dialog-title"
+              style={{
+                fontFamily: typography.fonts.serif,
+                fontSize: typography.size.lg,
+                fontWeight: typography.weight.semibold,
+                color: colors.text.primary,
+                margin: '0 0 12px 0',
+              }}
+            >
+              {getTranslation('clearPastConversationsTitle', language)}
+            </h3>
+            <p
+              style={{
+                fontFamily: typography.fonts.sans,
+                fontSize: typography.size.sm,
+                color: colors.text.secondary,
+                lineHeight: 1.5,
+                margin: '0 0 20px 0',
+              }}
+            >
+              {getTranslation('clearPastConversationsMessage', language)}
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowClearHistoryConfirm(false)}
+                style={{
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.sm,
+                  color: colors.text.secondary,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                }}
+              >
+                {getTranslation('clearPastConversationsCancel', language)}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearPastConversations}
+                style={{
+                  fontFamily: typography.fonts.sans,
+                  fontSize: typography.size.sm,
+                  fontWeight: typography.weight.medium,
+                  color: '#fff',
+                  background: colors.primary?.DEFAULT ?? '#16a34a',
+                  border: 'none',
+                  borderRadius: radii.md,
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                }}
+              >
+                {getTranslation('clearPastConversationsConfirm', language)}
+              </button>
             </div>
           </div>
         </div>
