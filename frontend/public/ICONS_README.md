@@ -1,52 +1,72 @@
-# PWA Icons
+# PWA Icons and Splash
 
-## Required Icons
+## Brand Colors
 
-The following icon files need to be generated for the PWA:
+- **Primary green:** `#1a4731`
+- **Secondary green:** `#2d6a4f`
+- **Accent saffron:** `#f4a261`
+- **White:** `#ffffff`
 
-- `icon-192x192.png` - 192x192 pixels
-- `icon-512x512.png` - 512x512 pixels (also used as maskable icon)
-- `apple-touch-icon.png` - 180x180 pixels
-- `favicon.ico` - 32x32 pixels
+All icons and the splash screen use this palette.
+
+## Source Assets
+
+- **favicon.svg** — 32×32 viewBox, rounded green square, white seedling mark, saffron accent dot. This is the single source for favicon.ico and PWA PNG icons.
+- **splash.svg** — 1170×2532 viewBox for iOS splash (gradient, logo, “Piritiya”, “Kisan ka Sathi”, “Powered by AWS”).
+
+## Required Output Files
+
+| File | Size | Purpose |
+|------|------|--------|
+| `favicon.ico` | 32×32 | Browser tab / legacy favicon |
+| `favicon.svg` | 32×32 | Modern favicon (vector) |
+| `icon-192x192.png` | 192×192 | PWA icon |
+| `icon-512x512.png` | 512×512 | PWA icon (and maskable) |
+| `apple-touch-icon.png` | 180×180 | iOS home screen |
+| `splash.png` | 1170×2532 | iOS startup splash |
 
 ## Generating Icons
 
-You can use the `icon.svg` file as a base and generate PNG files using:
+### Node script (recommended)
 
-1. **Online tools:**
-   - https://realfavicongenerator.net/
-   - https://www.pwabuilder.com/imageGenerator
+From the `frontend` directory, using the project’s `sharp` and `to-ico` dev dependencies:
 
-2. **Command line (ImageMagick):**
-   ```bash
-   # Install ImageMagick if not already installed
-   # brew install imagemagick (macOS)
-   # apt-get install imagemagick (Ubuntu)
-   
-   # Generate icons
-   convert icon.svg -resize 192x192 icon-192x192.png
-   convert icon.svg -resize 512x512 icon-512x512.png
-   convert icon.svg -resize 180x180 apple-touch-icon.png
-   convert icon.svg -resize 32x32 favicon.ico
-   ```
+```bash
+node scripts/generate-icons.js
+```
 
-3. **Node.js (sharp):**
-   ```bash
-   npm install -g sharp-cli
-   sharp -i icon.svg -o icon-192x192.png resize 192 192
-   sharp -i icon.svg -o icon-512x512.png resize 512 512
-   sharp -i icon.svg -o apple-touch-icon.png resize 180 180
-   sharp -i icon.svg -o favicon.ico resize 32 32
-   ```
+This produces:
+
+- `public/favicon.ico` from `favicon.svg`
+- `public/icon-192x192.png`, `public/icon-512x512.png`, `public/apple-touch-icon.png` from `favicon.svg`
+- `public/splash.png` from `public/splash.svg`
+
+Install deps if needed:
+
+```bash
+npm install -D sharp to-ico --legacy-peer-deps
+```
+
+### ImageMagick (alternative)
+
+```bash
+cd public
+# Favicon and PNG icons from favicon.svg
+convert -background none favicon.svg -resize 32x32 favicon.ico
+convert -background none favicon.svg -resize 192x192 icon-192x192.png
+convert -background none favicon.svg -resize 512x512 icon-512x512.png
+convert -background none favicon.svg -resize 180x180 apple-touch-icon.png
+# iOS splash from splash.svg
+convert -background none splash.svg -resize 1170x2532 splash.png
+```
+
+### Online tools
+
+- [realfavicongenerator.net](https://realfavicongenerator.net/) — upload PNG/SVG for favicon and app icons
+- [PWA Builder Image Generator](https://www.pwabuilder.com/imageGenerator) — PWA icons
 
 ## Design Guidelines
 
-- Use simple, recognizable imagery (wheat/crop symbol)
-- Ensure good contrast for visibility
-- Test on both light and dark backgrounds
-- Follow Material Design icon guidelines for maskable icons
-- Maintain safe zone for maskable icons (80% of canvas)
-
-## Current Status
-
-Currently using placeholder SVG icon. Generate proper PNG icons before production deployment.
+- Use the seedling mark (stem + two leaves + soil) from `favicon.svg` for consistency.
+- Maskable 512×512: keep important content within ~80% of the canvas (safe zone).
+- Test on light and dark backgrounds and in browser/PWA install UI.

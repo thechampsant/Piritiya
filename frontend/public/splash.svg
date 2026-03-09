@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1170 2532" width="1170" height="2532">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#2d6a4f"/>
+      <stop offset="100%" stop-color="#1a4731"/>
+    </radialGradient>
+    <radialGradient id="blob" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#f4a261" stop-opacity="0.15"/>
+      <stop offset="70%" stop-color="#f4a261" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1170" height="2532" fill="url(#bg)"/>
+  <ellipse cx="585" cy="1012" rx="400" ry="400" fill="url(#blob)" opacity="0.9"/>
+  <!-- Logo circle -->
+  <circle cx="585" cy="1100" r="120" fill="#2d6a4f"/>
+  <!-- Seedling: stem -->
+  <line x1="585" y1="1190" x2="585" y2="1040" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <!-- Left leaf -->
+  <path d="M585 1130 Q540 1100 510 1040 Q555 1055 585 1110" fill="#ffffff" opacity="0.95"/>
+  <!-- Right leaf -->
+  <path d="M585 1120 Q630 1090 660 1030 Q615 1045 585 1100" fill="#ffffff" opacity="0.95"/>
+  <!-- Soil -->
+  <path d="M495 1190 Q585 1160 675 1190" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.5"/>
+  <!-- Piritiya text -->
+  <text x="585" y="1280" text-anchor="middle" font-family="Georgia, serif" font-size="96" font-weight="700" fill="#ffffff" letter-spacing="4">Piritiya</text>
+  <!-- Saffron underline -->
+  <rect x="505" y="1298" width="160" height="6" rx="2" fill="#f4a261"/>
+  <!-- Tagline -->
+  <text x="585" y="1350" text-anchor="middle" font-family="sans-serif" font-size="48" fill="#b3e0b3">Kisan ka Sathi</text>
+  <!-- Powered by AWS -->
+  <text x="585" y="2450" text-anchor="middle" font-family="sans-serif" font-size="32" fill="#4d7a5c">Powered by AWS</text>
+</svg>

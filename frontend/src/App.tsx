@@ -6,6 +6,7 @@ import ChatScreen from './screens/ChatScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import BottomNavigation from './screens/components/BottomNavigation';
+import SplashScreen from './components/SplashScreen';
 import './App.css';
 
 type Screen = 'onboard' | 'home' | 'chat' | 'explore' | 'settings';
@@ -58,6 +59,7 @@ function App() {
   const { state, isLoading, retryBackendCheck } = useApp();
   const [currentScreen, setCurrentScreen] = useState<Screen>('onboard');
   const [loaded, setLoaded] = useState(false);
+  const [showSplash, setShowSplash] = useState(() => !localStorage.getItem('piritiya-splash-shown'));
 
   useEffect(() => {
     setTimeout(() => setLoaded(true), 100);
@@ -113,6 +115,14 @@ function App() {
 
   return (
     <>
+      {showSplash && (
+        <SplashScreen
+          onDone={() => {
+            setShowSplash(false);
+            localStorage.setItem('piritiya-splash-shown', 'true');
+          }}
+        />
+      )}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }

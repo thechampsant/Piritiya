@@ -24,8 +24,13 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
   - Runtime caching for AWS API Gateway endpoints
 
 **Voice Interface:**
-- **Web Speech API** - Native browser speech recognition and synthesis
-- **Real-time Transcription** - Hindi (hi-IN) and English (en-IN) support
+- **Web Speech API** - Native browser speech recognition (interim results for live transcript pill) and synthesis fallback
+- **Streaming Transcription** - WebSocket to backend for real-time Amazon Transcribe while recording; Hindi (hi-IN) and English (en-IN)
+- **Voice Orb State Machine** - IDLE, RECORDING, TRANSCRIBING, THINKING, SUCCESS, ERROR with Hindi-first labels; Indian flag gradient (IDLE), red ripples + voice-activity bars (RECORDING), spinning dashed border (TRANSCRIBING), green breath (THINKING), green flash + checkmark (SUCCESS), red pulse (ERROR)
+- **Auto-stop on Silence** - AudioContext + AnalyserNode; amplitude below 0.01 for 1.5s then 500ms countdown ring then auto-stop; 8s hard cap on recording; second tap cancels (no send)
+- **Live Interim Transcript** - Web Speech with `interimResults` in parallel during recording; floating pill above orb (max 2 lines); cleared when final is sent
+- **Replay** - After Polly plays, replay button below orb; `useVoiceOutput` exposes `replay()`, `canReplay`, `clearReplay()` from cached blob URL
+- **Cancel** - X button during RECORDING, TRANSCRIBING, THINKING; aborts in-flight requests and returns to IDLE
 - **Fallback Support** - Graceful degradation to text input when voice unavailable
 
 **State Management:**
@@ -34,13 +39,14 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
   - `LanguageContext` - i18n wrapper with formatting utilities
   - `ChatContext` - Chat session and message management
 - **Custom Hooks:**
-  - `useChat` - Message handling and API communication
+  - `useChat` - Message handling, streaming Bedrock response, pre-fetch cache injection
   - `useOfflineSync` - Background sync for pending queries
-  - `useVoiceInput` - Speech recognition lifecycle
-  - `useVoiceOutput` - Text-to-speech playback
+  - `useVoiceInput` - Recording (MediaRecorder), streaming Transcribe WebSocket, silence detection (1.5s + 500ms countdown), 8s cap, live interim transcript, cancel; returns `orbState`, `silenceCountdownProgress`, `liveInterimTranscript`, `cancelVoicePipeline`
+  - `useVoiceOutput` - Text-to-speech (Polly or Web Speech), `replay()`, `canReplay`, `clearReplay()` for last Polly blob
 
 **Offline-First Architecture:**
 - Pending query queue in IndexedDB
+- Pre-fetch cache (IndexedDB store `prefetchCache`) for soil, crop, market, govt-schemes with TTLs; injected into Bedrock context so agent can skip tool calls when data is fresh
 - Automatic background sync when connectivity restored
 - Session persistence across app restarts
 - Optimistic UI updates with rollback on failure
@@ -74,7 +80,9 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
 - `POST /crop-advice` - ML-driven crop recommendations
 - `GET /market-prices` - Real-time market intelligence
 - `GET /advice/{farmer_id}` - Aggregated advisory (soil + crops + prices)
-- `POST /chat` - Conversational AI interface via Bedrock Agent
+- `POST /chat` - Conversational AI via Bedrock Agent; accepts `cached_prefetch`; returns Server-Sent Events (streaming) for word-by-word response
+- `POST /speech/synthesize` - Text-to-speech via Amazon Polly (standard engine; Kajal for Hindi, Aditi for English)
+- `WebSocket /speech/transcribe/stream` - Streaming speech-to-text via Amazon Transcribe (PCM 16 kHz); sends partial/final transcripts as JSON
 
 ### AWS Cloud Infrastructure
 
@@ -82,6 +90,8 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
 - **get-soil-moisture** - Processes NISAR satellite imagery, returns moisture percentage and status
 - **get-crop-advice** - Analyzes soil conditions, generates water-efficient crop recommendations
 - **get-market-prices** - Fetches Agmarknet data, provides pricing intelligence
+- **get-govt-schemes** - Government schemes and subsidy information
+- **Lambda warmer** - EventBridge rule pings all four Lambdas every 5 minutes to reduce cold starts (`scripts/lambda_warmer.py`)
 
 **Data Layer:**
 - **DynamoDB Tables:**
@@ -91,10 +101,10 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
   - `Consultations` - Chat session history and context
 
 **AI/ML Services:**
-- **Amazon Bedrock Agent Runtime** - Orchestrates conversational AI
+- **Amazon Bedrock Agent Runtime** - Orchestrates conversational AI; streaming invocation for first-token latency; can use pre-fetched cache to skip tool calls when data is fresh
 - **Claude (via Bedrock)** - Large language model for natural dialogue
-- **Amazon Transcribe** - Speech-to-text (real-time for hi-IN/en-IN, batch for 6 other languages)
-- **Amazon Polly** - Text-to-speech (Kajal Neural voice for Hindi, Aditi for English)
+- **Amazon Transcribe** - Streaming (WebSocket) for real-time transcription while recording; batch fallback for long audio or when stream final is delayed
+- **Amazon Polly** - Text-to-speech with standard engine (Kajal for Hindi, Aditi for English); MP3 blob cached for replay
 - **Amazon Translate** - Multi-language support across 8 Indian languages
 
 **Region Configuration:**
@@ -121,7 +131,7 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
   - Noto Sans family - 7 Indian script fonts (Devanagari, Bengali, Gujarati, Kannada, Malayalam, Tamil, Telugu)
 
 **Key Components:**
-- `VoiceOrb` - Tricolour gradient orb with ripple animations (idle/listening states)
+- `VoiceOrb` - Full state machine: Indian flag gradient (IDLE), red ripples + voice-activity bars + 500ms countdown ring (RECORDING), spinning dashed border (TRANSCRIBING), green breath (THINKING), green flash + checkmark (SUCCESS), red pulse (ERROR); live transcript pill, replay slot, cancel X during RECORDING/TRANSCRIBING/THINKING
 - `FrostedCard` - Glassmorphic card surface with backdrop blur
 - `AmbientBg` - Animated radial gradient blobs
 - `SoilGauge` - Semicircle gauge with status indicators
@@ -153,11 +163,11 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
 ## Data Flow Architecture
 
 ### User Query Flow:
-1. **Voice Input** → Web Speech API → Text transcription
-2. **Text Processing** → Frontend validation → API request
-3. **Backend Routing** → FastAPI → Lambda invocation
-4. **AI Processing** → Bedrock Agent → Claude LLM → Response generation
-5. **Response Delivery** → Backend → Frontend → Voice synthesis (Polly)
+1. **App Open** → Pre-fetch: soil moisture, crop advice, market prices, govt schemes → Cache in IndexedDB with TTLs (30m / 30m / 15m / 24h)
+2. **Voice Input** → Tap orb → Recording (MediaRecorder) + streaming Transcribe WebSocket; silence detection (1.5s then 500ms countdown) or 8s cap → Auto-stop
+3. **Transcription** → Streaming final or wait-for-final (2.5s cap) then fallback to batch Transcribe if needed
+4. **Chat Request** → POST /chat with transcript + `cached_prefetch` → Bedrock Agent (streaming); first tokens in ~800ms
+5. **Response Delivery** → SSE stream → Word-by-word UI update → Polly synthesis (auto-play); replay from cached blob
 6. **Offline Handling** → IndexedDB queue → Background sync when online
 
 ### Offline-First Strategy:
@@ -264,7 +274,7 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
 **Production Environment:**
 - **Frontend:** Vite build → S3 bucket → CloudFront CDN
 - **Backend:** FastAPI → AWS Lambda (containerized) or EC2
-- **Lambda Functions:** Deployed via `deploy.sh` script with layer packaging
+- **Lambda Functions:** Deployed via `deploy.sh` script with layer packaging; optional EventBridge warmer via `python scripts/lambda_warmer.py`
 - **Database:** DynamoDB with on-demand billing
 - **Monitoring:** CloudWatch logs and metrics
 
@@ -277,10 +287,12 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
 ## Key Technical Features
 
 ### 1. Voice-First Interface
+- **Single-tap to start** - One tap begins recording; auto-stop on silence (1.5s + 500ms countdown) or 8s cap; second tap cancels only
+- **Streaming transcription** - Real-time Transcribe via WebSocket while speaking; wait-for-final (2.5s) before batch fallback to avoid long delays on long recordings
+- **Visual feedback** - VoiceOrb state machine with voice-activity bars (amplitude), 500ms countdown ring before auto-stop, live transcript pill, Hindi labels (e.g. सुन रहा हूं..., समझ रहा हूं...)
+- **Replay** - After Polly plays, replay button below orb from cached blob until next recording
 - **Dual-mode input** - Voice and text with seamless switching
-- **Visual feedback** - Animated VoiceOrb with ripple effects during listening
-- **Language detection** - Automatic language identification from speech
-- **Error recovery** - Graceful fallback to text input on voice failure
+- **Error recovery** - Graceful fallback to text input on voice failure; cancel X during RECORDING/TRANSCRIBING/THINKING
 
 ### 2. Offline Capability
 - **Service Worker** - Workbox-powered caching with multiple strategies
@@ -317,9 +329,10 @@ Piritiya is a voice-first, offline-capable Progressive Web Application (PWA) des
 
 ### API Performance Targets
 - **Response Time:** <500ms (p95)
-- **Lambda Cold Start:** <2s
+- **Lambda Cold Start:** <2s (mitigated by 5-min EventBridge warmer)
 - **DynamoDB Queries:** <100ms
-- **Bedrock Agent:** <3s for simple queries
+- **Bedrock Agent:** First tokens ~800ms via streaming; pre-fetch cache avoids tool call latency when data is fresh
+- **Voice Pipeline:** Auto-stop 1.5s silence + 500ms countdown; streaming Transcribe + wait-for-final (2.5s) to avoid batch delay on long recordings
 
 ### Browser Support
 - **Modern Browsers:** Chrome 90+, Safari 14+, Firefox 88+, Edge 90+
@@ -413,10 +426,10 @@ VITE_AWS_REGION=us-east-1
 - **Real-time Processing** - Lambda functions process raw satellite data on-demand
 
 ### 2. Voice-First for Rural Users
-- **Low Literacy Support** - Voice interface removes text input barriers
-- **Native Language** - Hindi and 7 regional languages for accessibility
+- **Low Literacy Support** - Voice interface removes text input barriers; one tap to speak, auto-stop when done
+- **Native Language** - Hindi and 7 regional languages; Hindi-first orb labels (e.g. जवाब मिल गया ✓, फिर से कोशिश करें)
 - **Offline Voice** - Web Speech API works without internet connectivity
-- **Visual Feedback** - Animated orb provides clear interaction cues
+- **Visual Feedback** - Voice-activity bars (flat when silent), 500ms countdown ring before send, full orb state machine with clear cues
 
 ### 3. Groundwater Conservation Focus
 - **Water-Efficient Crops** - Recommendations prioritize low water consumption
